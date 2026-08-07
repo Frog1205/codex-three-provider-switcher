@@ -1,0 +1,16 @@
+# Secrets and local Codex state
+.env
+.env.*
+!.env.example
+auth.json
+config.toml
+*.local.json
+*.local.toml
+provider-switch-backups/
+
+# Generated files
+*.zip
+*.log
+test-results/
+.vscode/
+.idea/
