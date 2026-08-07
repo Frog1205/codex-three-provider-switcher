@@ -10,6 +10,12 @@
 
 > 这是非官方社区工具。它不会提供、共享或代购任何 API Key，也不会绕过供应商的账号、额度或使用限制。
 
+## 最终效果
+
+![Codex 三线路切换器最终界面](docs/assets/codex-provider-switcher.png)
+
+界面会显示当前 provider、模型、两个第三方 Key 的配置状态以及 DeepSeek 模型目录状态。截图中的 `Ready` 只表示对应配置在本机可用，不包含或展示任何真实 Key。
+
 ## 它会做什么
 
 - 提供一个包含三个按钮的 Windows 桌面窗口。
