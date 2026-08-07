@@ -36,7 +36,7 @@
 
 当官方账号额度不足、暂时受限或需要使用其他模型时，可以一键切换到 Honknet 或 DeepSeek 线路，继续通过 Codex Desktop 工作。官方额度恢复后，再点击 `GPT Official` 切回，原有 OpenAI/ChatGPT 登录状态仍然保留。
 
-本项目采用人工一键切换，不读取或猜测官方订阅剩余额度，也不会自动在后台更改线路。切换后必须重启客户端并新建任务，才能明确验证新的 provider。
+本项目会读取已登录官方账号返回的 Codex 限额数据，用于显示剩余百分比和重置时间；线路切换仍然是人工一键操作，不会自动在后台更改 provider。切换后必须重启客户端并新建任务，才能明确验证新的线路。
 
 > 不建议让 CC Switch、其他 provider 管理工具和本项目同时改写同一个 `config.toml`。确定使用本项目后，应由一个工具统一管理线路，避免配置再次相互覆盖。
 
@@ -47,6 +47,7 @@
 - 只替换顶层模型路由设置，并维护自己的 provider table。
 - 保留现有的插件、MCP、权限、features、projects 等其他配置。
 - 从 Windows 环境变量读取第三方 Key，不把 Key 写入仓库或 TOML。
+- 显示官方 Codex 剩余量、重置时间，并在窗口打开期间每 60 秒自动刷新。
 - 切换后重启 Codex Desktop；已有任务不会改变 provider，需要新建任务。
 
 ## 系统要求
@@ -63,6 +64,19 @@
 
 - Honknet 和 DeepSeek 线路需要你自己合法取得的 API Key。
 - 第三方服务端必须支持 Codex 使用的 Responses API。只支持 `chat/completions` 的接口不能直接使用本项目默认配置。
+- 官方额度显示需要 Node.js 和 npm 版 `@openai/codex` CLI；未安装时三路切换仍可使用，只有额度区域显示 `Unavailable`。
+
+检查 Codex CLI：
+
+```powershell
+codex --version
+```
+
+需要安装或更新时：
+
+```powershell
+npm install -g @openai/codex
+```
 
 ## 重要安全提醒
 
@@ -203,6 +217,7 @@ Codex Three-Provider Switcher
 - Honknet Key 是否存在。
 - DeepSeek Key 是否存在。
 - DeepSeek 模型目录是否可用。
+- 官方 Codex 剩余百分比和重置时间。
 
 三个按钮分别切换到：
 
@@ -215,6 +230,22 @@ Codex Three-Provider Switcher
 ```text
 %USERPROFILE%\.codex\provider-switch-backups
 ```
+
+### 官方额度显示
+
+窗口打开后会立即读取一次官方 Codex 剩余量，随后每 60 秒刷新。即使当前 provider 是 Honknet 或 DeepSeek，额度读取器也会独立查询已登录的官方账号。
+
+当剩余量从 `0%` 恢复为可用状态时，额度区域会变成绿色并显示：
+
+```text
+Official quota is available. You can switch back to GPT Official.
+```
+
+本版本只显示和提示，不会自动替你切换 provider。确认额度恢复后，由你点击 `GPT Official`，等待客户端重启并新建任务。
+
+额度读取使用当前 Codex app-server 的 `account/rateLimits/read` 协议。官方公开文档承诺的查看方式是 [usage dashboard](https://chatgpt.com/codex/settings/usage) 和 CLI 会话中的 `/status`；如果后续 Codex 版本调整本地协议，额度区域会降级为 `Unavailable`，不会影响 provider 切换。
+
+自动刷新只在切换器窗口保持打开时运行。关闭窗口后不会安装后台服务或计划任务。
 
 ## 命令行使用
 
@@ -313,7 +344,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Switcher.ps
 预期输出：
 
 ```text
-PASS: syntax, aliases, provider/model routing, unrelated config preservation, and backups.
+PASS: syntax, quota reader packaging, aliases, provider/model routing, unrelated config preservation, and backups.
 ```
 
 真实线路验收清单：
@@ -337,6 +368,17 @@ PASS: syntax, aliases, provider/model routing, unrelated config preservation, an
 ### 显示 `DEEPSEEK_API_KEY is missing`
 
 处理方法与 Honknet 相同。不要把 Key 写进 `providers.json`。
+
+### 显示 `Official Codex remaining: Unavailable`
+
+这只代表额度查询失败，不影响三个 provider 按钮。依次检查：
+
+1. `codex --version` 是否可以正常运行。
+2. `%APPDATA%\npm\node_modules\@openai\codex\bin\codex.js` 是否存在。
+3. 官方 Codex 账号是否已经登录。
+4. 点击 `Refresh` 重试，或使用官方 [usage dashboard](https://chatgpt.com/codex/settings/usage) 核对。
+
+查询器每个阶段最多等待 8 秒，失败后不会卡住主窗口，并会在下一次自动刷新时重试。
 
 ### 返回 `401` 或 `403`
 
@@ -405,6 +447,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1 -RemoveC
 |-- LICENSE
 |-- src
 |   |-- CodexProviderSwitcher.ps1
+|   |-- Get-CodexRateLimits.ps1
 |   |-- providers.json
 |   `-- deepseek-model-catalog.json
 `-- tests

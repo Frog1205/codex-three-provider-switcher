@@ -3,6 +3,9 @@ param(
     [string]$Mode = 'gui',
     [string]$ConfigPath = (Join-Path $env:USERPROFILE '.codex\config.toml'),
     [string]$ProvidersPath = (Join-Path $PSScriptRoot 'providers.json'),
+    [string]$RateLimitsPath = (Join-Path $PSScriptRoot 'Get-CodexRateLimits.ps1'),
+    [ValidateRange(15, 3600)]
+    [int]$QuotaRefreshSeconds = 60,
     [switch]$NoRestart
 )
 
@@ -85,6 +88,16 @@ function Get-CurrentState {
         'openai' { [string]$definitions.official.display_name }
         'honknet' { [string]$definitions.honknet.display_name }
         'deepseek' { [string]$definitions.deepseek.display_name }
+        'custom' {
+            $customBlock = [regex]::Match(
+                $text,
+                '(?ms)^[ \t]*\[model_providers\.custom\][ \t]*\r?\n.*?(?=^[ \t]*\[|\z)'
+            ).Value
+            if ($customBlock -match '(?im)^[ \t]*base_url[ \t]*=[ \t]*["''][^"'']*honknet[^"'']*["'']') {
+                "$($definitions.honknet.display_name) (legacy)"
+            }
+            else { 'custom' }
+        }
         default { $provider }
     }
     return [pscustomobject]@{ Provider = $provider; Model = $model; Display = $display }
@@ -271,7 +284,7 @@ function Show-Switcher {
     $definitions = Get-Providers
     $form = New-Object Windows.Forms.Form
     $form.Text = 'Codex Three-Provider Switcher'
-    $form.ClientSize = New-Object Drawing.Size(680, 350)
+    $form.ClientSize = New-Object Drawing.Size(680, 500)
     $form.StartPosition = 'CenterScreen'
     $form.FormBorderStyle = 'FixedDialog'
     $form.MaximizeBox = $false
@@ -335,18 +348,225 @@ function Show-Switcher {
     $health = New-Object Windows.Forms.Label
     $health.AutoSize = $false
     $health.Size = New-Object Drawing.Size(610, 38)
-    $health.Location = New-Object Drawing.Point(33, 252)
+    $health.Location = New-Object Drawing.Point(33, 244)
     $form.Controls.Add($health)
+
+    $quotaTitle = New-Object Windows.Forms.Label
+    $quotaTitle.Text = 'Official Codex quota'
+    $quotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
+    $quotaTitle.AutoSize = $true
+    $quotaTitle.Location = New-Object Drawing.Point(33, 286)
+    $form.Controls.Add($quotaTitle)
+
+    $refreshQuotaButton = New-Object Windows.Forms.Button
+    $refreshQuotaButton.Text = 'Refresh'
+    $refreshQuotaButton.Size = New-Object Drawing.Size(88, 32)
+    $refreshQuotaButton.Location = New-Object Drawing.Point(559, 280)
+    $form.Controls.Add($refreshQuotaButton)
+
+    $quotaPercent = New-Object Windows.Forms.Label
+    $quotaPercent.Text = 'Official Codex remaining: Checking...'
+    $quotaPercent.AutoSize = $true
+    $quotaPercent.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
+    $quotaPercent.Location = New-Object Drawing.Point(33, 322)
+    $form.Controls.Add($quotaPercent)
+
+    $quotaTrack = New-Object Windows.Forms.Panel
+    $quotaTrack.Size = New-Object Drawing.Size(614, 20)
+    $quotaTrack.Location = New-Object Drawing.Point(33, 351)
+    $quotaTrack.BackColor = [Drawing.Color]::FromArgb(225, 228, 232)
+    $form.Controls.Add($quotaTrack)
+
+    $quotaFill = New-Object Windows.Forms.Panel
+    $quotaFill.Size = New-Object Drawing.Size(1, 20)
+    $quotaFill.Location = New-Object Drawing.Point(0, 0)
+    $quotaFill.BackColor = [Drawing.Color]::FromArgb(156, 163, 175)
+    $quotaTrack.Controls.Add($quotaFill)
+
+    $quotaReset = New-Object Windows.Forms.Label
+    $quotaReset.Text = 'Resets: Waiting for official account data'
+    $quotaReset.AutoSize = $true
+    $quotaReset.Location = New-Object Drawing.Point(33, 382)
+    $form.Controls.Add($quotaReset)
+
+    $quotaStatus = New-Object Windows.Forms.Label
+    $quotaStatus.Text = "Auto refresh: every $QuotaRefreshSeconds seconds"
+    $quotaStatus.AutoSize = $false
+    $quotaStatus.Size = New-Object Drawing.Size(614, 34)
+    $quotaStatus.Location = New-Object Drawing.Point(33, 412)
+    $quotaStatus.ForeColor = [Drawing.Color]::DimGray
+    $form.Controls.Add($quotaStatus)
 
     $privacy = New-Object Windows.Forms.Label
     $privacy.Text = 'Keys come only from Windows environment variables. Config is backed up.'
     $privacy.ForeColor = [Drawing.Color]::DimGray
     $privacy.AutoSize = $false
     $privacy.Size = New-Object Drawing.Size(610, 30)
-    $privacy.Location = New-Object Drawing.Point(33, 292)
+    $privacy.Location = New-Object Drawing.Point(33, 462)
     $form.Controls.Add($privacy)
 
+    $quotaState = @{
+        Process = $null
+        OutputTask = $null
+        ErrorTask = $null
+        StartedAt = $null
+        TimedOut = $false
+        LastRemaining = $null
+    }
+
+    $showQuotaError = {
+        param([string]$Message)
+        $quotaPercent.Text = 'Official Codex remaining: Unavailable'
+        $quotaPercent.ForeColor = [Drawing.Color]::Firebrick
+        $quotaFill.Width = 1
+        $quotaFill.BackColor = [Drawing.Color]::Firebrick
+        $quotaReset.Text = 'Resets: Unknown'
+        $quotaStatus.Text = "$Message`r`nThe provider switcher remains available."
+        $quotaStatus.ForeColor = [Drawing.Color]::Firebrick
+    }
+
+    $applyQuotaJson = {
+        param([string]$Text)
+        try {
+            $data = $Text | ConvertFrom-Json
+            $remaining = [math]::Max(0, [math]::Min(100, [double]$data.codex_remaining_percent))
+            $quotaPercent.Text = ('Official Codex remaining: {0:0.#}%' -f $remaining)
+            $quotaFill.Width = [math]::Max(1, [int][math]::Round($quotaTrack.ClientSize.Width * $remaining / 100))
+            $color = if ($remaining -gt 50) {
+                [Drawing.Color]::FromArgb(22, 163, 74)
+            }
+            elseif ($remaining -gt 20) {
+                [Drawing.Color]::FromArgb(217, 119, 6)
+            }
+            else {
+                [Drawing.Color]::FromArgb(220, 38, 38)
+            }
+            $quotaPercent.ForeColor = $color
+            $quotaFill.BackColor = $color
+
+            if (-not [string]::IsNullOrWhiteSpace([string]$data.codex_resets_at_local)) {
+                $reset = [DateTimeOffset]::Parse([string]$data.codex_resets_at_local).ToLocalTime()
+                $quotaReset.Text = "Resets: $($reset.ToString('yyyy-MM-dd HH:mm'))"
+            }
+            else {
+                $quotaReset.Text = 'Resets: Not reported'
+            }
+
+            $checked = [DateTimeOffset]::Parse([string]$data.checked_at).ToLocalTime()
+            $current = Get-CurrentState
+            if ($current.Provider -ne 'openai' -and $remaining -gt 0) {
+                $quotaStatus.Text = "Official quota is available. You can switch back to GPT Official.`r`nUpdated $($checked.ToString('HH:mm:ss')); auto refresh every $QuotaRefreshSeconds seconds."
+                $quotaStatus.ForeColor = [Drawing.Color]::ForestGreen
+            }
+            elseif ($remaining -le 0) {
+                $quotaStatus.Text = "Official quota is exhausted. Keep using a relay until reset.`r`nUpdated $($checked.ToString('HH:mm:ss')); auto refresh every $QuotaRefreshSeconds seconds."
+                $quotaStatus.ForeColor = [Drawing.Color]::Firebrick
+            }
+            else {
+                $quotaStatus.Text = "Official quota is available.`r`nUpdated $($checked.ToString('HH:mm:ss')); auto refresh every $QuotaRefreshSeconds seconds."
+                $quotaStatus.ForeColor = [Drawing.Color]::ForestGreen
+            }
+
+            if ($null -ne $quotaState.LastRemaining -and [double]$quotaState.LastRemaining -le 0 -and $remaining -gt 0) {
+                [System.Media.SystemSounds]::Asterisk.Play()
+            }
+            $quotaState.LastRemaining = $remaining
+        }
+        catch {
+            & $showQuotaError "Quota response could not be parsed: $($_.Exception.Message)"
+        }
+    }
+
+    $startQuotaRefresh = {
+        if ($null -ne $quotaState.Process -and -not $quotaState.Process.HasExited) { return }
+        if (-not (Test-Path -LiteralPath $RateLimitsPath)) {
+            & $showQuotaError "Quota reader not found: $RateLimitsPath"
+            return
+        }
+
+        $startInfo = New-Object Diagnostics.ProcessStartInfo
+        $startInfo.FileName = (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
+        $startInfo.Arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$RateLimitsPath`" -Json -TimeoutSeconds 8"
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.CreateNoWindow = $true
+
+        $process = New-Object Diagnostics.Process
+        $process.StartInfo = $startInfo
+        [void]$process.Start()
+        $quotaState.Process = $process
+        $quotaState.OutputTask = $process.StandardOutput.ReadLineAsync()
+        $quotaState.ErrorTask = $process.StandardError.ReadLineAsync()
+        $quotaState.StartedAt = [DateTimeOffset]::Now
+        $quotaState.TimedOut = $false
+        $refreshQuotaButton.Enabled = $false
+        $refreshQuotaButton.Text = 'Checking...'
+    }
+
+    $quotaPollTimer = New-Object Windows.Forms.Timer
+    $quotaPollTimer.Interval = 500
+    $quotaPollTimer.Add_Tick({
+        $process = $quotaState.Process
+        if ($null -eq $process) { return }
+        if ($quotaState.OutputTask.IsCompleted -and -not [string]::IsNullOrWhiteSpace($quotaState.OutputTask.Result)) {
+            $stdout = $quotaState.OutputTask.Result
+            if (-not $process.HasExited) {
+                [void]$process.WaitForExit(1000)
+                if (-not $process.HasExited) { try { $process.Kill() } catch { } }
+            }
+            $process.Dispose()
+            $quotaState.Process = $null
+            $refreshQuotaButton.Enabled = $true
+            $refreshQuotaButton.Text = 'Refresh'
+            & $applyQuotaJson $stdout
+            return
+        }
+        if (-not $process.HasExited) {
+            if (([DateTimeOffset]::Now - $quotaState.StartedAt).TotalSeconds -gt 30) {
+                $quotaState.TimedOut = $true
+                try { $process.Kill() } catch { }
+            }
+            return
+        }
+
+        $stdout = if ($quotaState.OutputTask.IsCompleted) { $quotaState.OutputTask.Result } else { '' }
+        $stderr = if ($quotaState.ErrorTask.IsCompleted) { $quotaState.ErrorTask.Result } else { '' }
+        $exitCode = $process.ExitCode
+        $process.Dispose()
+        $quotaState.Process = $null
+        $refreshQuotaButton.Enabled = $true
+        $refreshQuotaButton.Text = 'Refresh'
+
+        if ($quotaState.TimedOut) {
+            & $showQuotaError 'Official quota check timed out.'
+        }
+        elseif ($exitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
+            $detail = if ([string]::IsNullOrWhiteSpace($stderr)) { 'No data returned.' } else { $stderr.Trim() }
+            & $showQuotaError "Official quota check failed: $detail"
+        }
+        else {
+            & $applyQuotaJson $stdout
+        }
+    })
+
+    $quotaAutoTimer = New-Object Windows.Forms.Timer
+    $quotaAutoTimer.Interval = $QuotaRefreshSeconds * 1000
+    $quotaAutoTimer.Add_Tick({ & $startQuotaRefresh })
+    $refreshQuotaButton.Add_Click({ & $startQuotaRefresh })
+
+    $form.Add_FormClosing({
+        $quotaAutoTimer.Stop()
+        $quotaPollTimer.Stop()
+        if ($null -ne $quotaState.Process -and -not $quotaState.Process.HasExited) {
+            try { $quotaState.Process.Kill() } catch { }
+        }
+    })
+
     & $refresh
+    $quotaPollTimer.Start()
+    $quotaAutoTimer.Start()
+    & $startQuotaRefresh
     [void]$form.ShowDialog()
 }
 
