@@ -45,7 +45,7 @@ public static class EnvironmentBroadcast {
 }
 
 $sourceDir = Join-Path $PSScriptRoot 'src'
-foreach ($required in @('CodexProviderSwitcher.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
+foreach ($required in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceDir $required))) {
         throw "Package file is missing: $required"
     }
@@ -54,6 +54,14 @@ foreach ($required in @('CodexProviderSwitcher.ps1', 'providers.json', 'deepseek
 [IO.Directory]::CreateDirectory($InstallDir) | Out-Null
 foreach ($file in Get-ChildItem -LiteralPath $sourceDir -File) {
     [IO.File]::Copy($file.FullName, (Join-Path $InstallDir $file.Name), $true)
+}
+
+$codexCliEntry = Join-Path $env:APPDATA 'npm\node_modules\@openai\codex\bin\codex.js'
+if (Test-Path -LiteralPath $codexCliEntry) {
+    Write-Output 'Official Codex quota display: Ready'
+}
+else {
+    Write-Warning 'Official Codex quota display needs the npm @openai/codex CLI. Provider switching will still work.'
 }
 
 if (-not $SkipCredentials) {
