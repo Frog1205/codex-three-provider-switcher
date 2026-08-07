@@ -16,6 +16,30 @@
 
 界面会显示当前 provider、模型、两个第三方 Key 的配置状态以及 DeepSeek 模型目录状态。截图中的 `Ready` 只表示对应配置在本机可用，不包含或展示任何真实 Key。
 
+## 为什么需要这个工具
+
+这个项目解决的核心问题不是“管理 Codex 登录账号”，而是明确控制 Codex Desktop 下一次启动时使用的 provider 和模型线路。
+
+### 1. 解决中转工具残留导致无法切回官方线路
+
+部分用户长期使用 CC Switch、Codex 路由工具或其他脚本配置中转 API。这些工具可能在 `%USERPROFILE%\.codex\config.toml` 中留下：
+
+- 顶层 `model_provider` 仍指向 `custom` 或其他第三方 provider。
+- 第三方 `base_url`、模型目录和 bearer token 配置继续生效。
+- 多个工具反复改写同一份配置，导致字段重复、配置错乱或状态难以判断。
+
+后续即使订阅了 Codex 官方账号并完成 OpenAI/ChatGPT 登录，客户端仍可能继续使用原来的中转 provider，看起来像是“官方账号无法登录”或“登录后没有切回官方模型”。这是因为账号授权状态和模型路由配置是两套独立状态：登录成功并不会自动清除第三方 `model_provider`。
+
+本工具在保留官方登录状态、MCP、插件和权限配置的前提下，明确重写顶层 provider/model 路由，并在切换前自动备份，从而稳定切回 GPT Official。
+
+### 2. 官方 Codex 额度不足时快速切换到中转 API
+
+当官方账号额度不足、暂时受限或需要使用其他模型时，可以一键切换到 Honknet 或 DeepSeek 线路，继续通过 Codex Desktop 工作。官方额度恢复后，再点击 `GPT Official` 切回，原有 OpenAI/ChatGPT 登录状态仍然保留。
+
+本项目采用人工一键切换，不读取或猜测官方订阅剩余额度，也不会自动在后台更改线路。切换后必须重启客户端并新建任务，才能明确验证新的 provider。
+
+> 不建议让 CC Switch、其他 provider 管理工具和本项目同时改写同一个 `config.toml`。确定使用本项目后，应由一个工具统一管理线路，避免配置再次相互覆盖。
+
 ## 它会做什么
 
 - 提供一个包含三个按钮的 Windows 桌面窗口。
