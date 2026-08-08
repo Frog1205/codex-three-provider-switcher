@@ -10,9 +10,24 @@
 
 > 这是非官方社区工具。它不会提供、共享或代购任何 API Key，也不会绕过供应商的账号、额度或使用限制。
 
-## 直接下载（推荐小白使用）
+## 下载与安装（推荐小白使用）
 
-仅支持 **Windows 10/11 64 位电脑**。请从本项目 GitHub Releases 下载，不要使用别人重新打包的版本：
+仅支持 **Windows 10/11 64 位电脑**。
+
+### Microsoft Store 版（正式发行方案，准备中）
+
+项目将优先通过 Microsoft Store 发布 MSIX。通过认证后，MSIX 会由 Microsoft 使用微软证书重新签名，用户从 Store 安装时不需要处理 GitHub 下载文件常见的 SmartScreen 警告。当前尚未通过 Store 认证，**不要从第三方网站下载所谓“商店签名版”**。
+
+- Store 上架后，这里会补充唯一的 Microsoft Store 官方链接。
+- Store 版与 GitHub 版使用同一套开源代码和 provider 配置。
+- 开发者无需购买商业代码签名证书；免费签名只适用于通过 Store 审核并由 Store 分发的 MSIX。
+- 在 GitHub 单独分发 MSIX 仍然需要开发者自己的可信签名，不能把未签名的 Store 上传包当作安装包发布。
+
+开发者请阅读 [Microsoft Store / MSIX 发布指南](docs/MICROSOFT-STORE.md)。
+
+### GitHub 备用下载
+
+在 Store 上架前，或无法访问 Store 时，请只从本项目 GitHub Releases 下载：
 
 - [下载安装版 EXE](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Setup-x64.exe)：推荐大多数用户使用，自动安装并创建桌面和开始菜单快捷方式。
 - [下载免安装便携版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Portable-x64.zip)：解压后双击启动，不写入安装目录或卸载信息。
@@ -35,7 +50,7 @@
 
 ### Windows 安全提示
 
-本项目是没有购买代码签名证书的开源社区工具，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请先确认文件来自本仓库的 GitHub Releases，再点击“更多信息”与“仍要运行”。如果下载来源不明，请不要运行。
+本提示只适用于 GitHub 提供的未签名 EXE/ZIP 备用版本。本项目没有为这些文件购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请先确认文件来自本仓库的 GitHub Releases，再点击“更多信息”与“仍要运行”。如果下载来源不明，请不要运行。通过 Microsoft Store 安装的正式 MSIX 由 Microsoft 签名，不使用这套手动放行流程。
 
 ## 最终效果
 

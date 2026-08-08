@@ -1,0 +1,59 @@
+name: Build Microsoft Store MSIX
+
+on:
+  workflow_dispatch:
+    inputs:
+      identity_name:
+        description: Partner Center Package/Identity/Name
+        required: true
+        type: string
+      publisher:
+        description: Partner Center Package/Identity/Publisher
+        required: true
+        type: string
+      publisher_display_name:
+        description: Partner Center PublisherDisplayName
+        required: true
+        type: string
+      version:
+        description: Three-part app version, for example 1.1.0
+        required: true
+        default: 1.0.0
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test switcher and MSIX packaging source
+        shell: powershell
+        run: |
+          .\tests\Test-Switcher.ps1
+          .\tests\Test-Packages.ps1
+          .\tests\Test-MSIXPackaging.ps1
+
+      - name: Build unsigned Store upload package
+        shell: powershell
+        env:
+          STORE_IDENTITY_NAME: ${{ inputs.identity_name }}
+          STORE_PUBLISHER: ${{ inputs.publisher }}
+          STORE_PUBLISHER_DISPLAY_NAME: ${{ inputs.publisher_display_name }}
+          STORE_VERSION: ${{ inputs.version }}
+        run: |
+          .\packaging\Build-MSIX.ps1 `
+            -IdentityName $env:STORE_IDENTITY_NAME `
+            -Publisher $env:STORE_PUBLISHER `
+            -PublisherDisplayName $env:STORE_PUBLISHER_DISPLAY_NAME `
+            -Version $env:STORE_VERSION
+
+      - name: Upload Partner Center package
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-switcher-${{ inputs.version }}-x64-store-upload
+          path: dist/*-Store.msix
+          if-no-files-found: error
