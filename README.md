@@ -10,6 +10,33 @@
 
 > 这是非官方社区工具。它不会提供、共享或代购任何 API Key，也不会绕过供应商的账号、额度或使用限制。
 
+## 直接下载（推荐小白使用）
+
+仅支持 **Windows 10/11 64 位电脑**。请从本项目 GitHub Releases 下载，不要使用别人重新打包的版本：
+
+- [下载安装版 EXE](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Setup-x64.exe)：推荐大多数用户使用，自动安装并创建桌面和开始菜单快捷方式。
+- [下载免安装便携版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Portable-x64.zip)：解压后双击启动，不写入安装目录或卸载信息。
+- [查看最新版本与更新说明](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest)
+
+### EXE 安装版
+
+1. 下载 `Codex-Three-Provider-Switcher-Setup-x64.exe`。
+2. 双击安装，不需要管理员权限。
+3. 安装完成后，双击桌面的“Codex 三线路切换器”。
+4. 只使用 GPT 官方线路时无需配置第三方 Key。
+5. 使用 Honknet 或 DeepSeek 时，从开始菜单打开“配置 Honknet 和 DeepSeek 密钥”，按提示进行隐藏输入。
+
+### ZIP 免安装版
+
+1. 下载 `Codex-Three-Provider-Switcher-Portable-x64.zip`。
+2. 右键选择“全部解压”，不能直接在压缩包内运行。
+3. 双击 `Start-Codex-Switcher.cmd` 打开切换器。
+4. 使用第三方线路前，双击 `Configure-Provider-Keys.cmd` 配置 Key。
+
+### Windows 安全提示
+
+本项目是没有购买代码签名证书的开源社区工具，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请先确认文件来自本仓库的 GitHub Releases，再点击“更多信息”与“仍要运行”。如果下载来源不明，请不要运行。
+
 ## 最终效果
 
 ![Codex 三线路切换器最终界面](docs/assets/codex-provider-switcher.png)
@@ -53,7 +80,7 @@
 
 ## 系统要求
 
-- Windows 11。
+- Windows 10 或 Windows 11，64 位 x64 电脑。
 - Microsoft Store 版 Codex Desktop。
 - Windows PowerShell 5.1 或 PowerShell 7。
 - 已至少启动并登录过一次 Codex Desktop，使下列文件存在：
@@ -90,7 +117,9 @@ npm install -g @openai/codex
 
 安装程序通过隐藏输入读取 Key，并保存到当前 Windows 用户的环境变量。仓库的 `.gitignore` 也会排除常见密钥和 Codex 本地配置文件，但 `.gitignore` 不是泄密后的补救措施。
 
-## 安装方法
+## 源码安装（高级用户）
+
+普通用户优先使用上面的 EXE 安装版或 ZIP 免安装版。以下步骤用于需要审查源码、修改 provider 或参与开发的用户。
 
 ### 第一步：登录官方 Codex
 
@@ -427,7 +456,9 @@ PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/mode
 
 ## 卸载
 
-在仓库目录执行：
+使用 EXE 安装版时，在 Windows“设置 > 应用 > 已安装的应用”中卸载 `Codex Three-Provider Switcher`，或使用开始菜单中的卸载入口。卸载程序文件时会保留 Codex 配置、线路备份和环境变量中的 Key。
+
+使用源码安装方式时，在仓库目录执行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1
@@ -456,13 +487,24 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1 -RemoveC
 |-- README.md
 |-- SECURITY.md
 |-- LICENSE
+|-- packaging
+|   |-- Build-Release.ps1
+|   |-- CodexThreeProviderSwitcher.iss
+|   `-- languages
+|       `-- ChineseSimplified.isl
+|-- portable
+|   |-- Start-Codex-Switcher.cmd
+|   |-- Configure-Provider-Keys.cmd
+|   `-- PORTABLE-README.md
 |-- src
 |   |-- CodexProviderSwitcher.ps1
+|   |-- ConfigureProviderKeys.ps1
 |   |-- Get-CodexRateLimits.ps1
 |   |-- providers.json
 |   `-- deepseek-model-catalog.json
 `-- tests
-    `-- Test-Switcher.ps1
+    |-- Test-Switcher.ps1
+    `-- Test-Packages.ps1
 ```
 
 ## 开发与贡献
@@ -471,7 +513,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1 -RemoveC
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Switcher.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Packages.ps1
 ```
+
+安装 Inno Setup 6 后，可复现生成发布文件：
+
+```powershell
+winget install --id JRSoftware.InnoSetup --exact
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.0.0
+```
+
+产物位于 `dist`，固定文件名用于 GitHub Releases 的 `latest/download` 链接。安装程序在编译配置中强制要求 Windows 10+ 与 x64 兼容架构。
 
 不要在 Issue、PR、测试 fixture 或日志中提交真实 Key。示例只能使用明确标记为测试用途的占位符。
 

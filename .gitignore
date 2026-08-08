@@ -10,7 +10,9 @@ provider-switch-backups/
 
 # Generated files
 *.zip
+*.exe
 *.log
+/dist/
 test-results/
 .vscode/
 .idea/
