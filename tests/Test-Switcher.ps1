@@ -14,6 +14,17 @@ try {
         if ($errors.Count -gt 0) { throw "PowerShell syntax errors in $scriptToParse" }
     }
     if (-not (Test-Path -LiteralPath $rateLimitReader)) { throw 'Rate-limit reader is missing.' }
+    $switcherBytes = [IO.File]::ReadAllBytes($script)
+    if ($switcherBytes.Length -lt 3 -or $switcherBytes[0] -ne 0xEF -or $switcherBytes[1] -ne 0xBB -or $switcherBytes[2] -ne 0xBF) {
+        throw 'The localized switcher must use UTF-8 with BOM for Windows PowerShell 5.1.'
+    }
+    $switcherText = [IO.File]::ReadAllText($script, [Text.Encoding]::UTF8)
+    foreach ($requiredUiText in @("[string]`$Language = 'zh-CN'", "LanguageButton = 'English'", "'zh-CN' = @{", "'en' = @{")) {
+        if (-not $switcherText.Contains($requiredUiText)) { throw "Localized UI text is missing: $requiredUiText" }
+    }
+    if ([regex]::Matches($switcherText, 'LanguageButton\s*=').Count -ne 2) {
+        throw 'Both Chinese and English language-toggle labels are required.'
+    }
 
     $config = Join-Path $testRoot 'config.toml'
     $auth = Join-Path $testRoot 'auth.json'
@@ -57,7 +68,7 @@ command = "example"
 
     $backupCount = @(Get-ChildItem -LiteralPath (Join-Path $testRoot 'provider-switch-backups') -Filter '*.toml').Count
     if ($backupCount -ne 4) { throw "Expected 4 backups, found $backupCount" }
-    Write-Output 'PASS: syntax, quota reader packaging, aliases, provider/model routing, unrelated config preservation, and backups.'
+    Write-Output 'PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/model routing, unrelated config preservation, and backups.'
 }
 finally {
     $env:HONKNET_API_KEY = $null
