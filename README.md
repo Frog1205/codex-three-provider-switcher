@@ -14,7 +14,7 @@
 
 ![Codex 三线路切换器最终界面](docs/assets/codex-provider-switcher.png)
 
-界面会显示当前 provider、模型、两个第三方 Key 的配置状态以及 DeepSeek 模型目录状态。截图中的 `Ready` 只表示对应配置在本机可用，不包含或展示任何真实 Key。
+面板默认显示中文；点击右上角的 `English` 可即时切换英文，再点击 `中文` 即可切回。界面会显示当前 provider、模型、两个第三方 Key 的配置状态以及 DeepSeek 模型目录状态。截图中的“已配置”只表示对应配置在本机可用，不包含或展示任何真实 Key。
 
 ## 为什么需要这个工具
 
@@ -43,6 +43,7 @@
 ## 它会做什么
 
 - 提供一个包含三个按钮的 Windows 桌面窗口。
+- 默认使用中文界面，并支持在窗口内即时切换中文和英文。
 - 切换前自动备份 `%USERPROFILE%\.codex\config.toml`。
 - 只替换顶层模型路由设置，并维护自己的 provider table。
 - 保留现有的插件、MCP、权限、features、projects 等其他配置。
@@ -219,6 +220,8 @@ Codex Three-Provider Switcher
 - DeepSeek 模型目录是否可用。
 - 官方 Codex 剩余百分比和重置时间。
 
+默认是中文界面。点击窗口右上角的 `English` 会立即切换全部面板文案、状态提示和弹窗；英文界面中点击 `中文` 可随时切回，不需要重启软件。
+
 三个按钮分别切换到：
 
 - `GPT Official`
@@ -268,6 +271,14 @@ powershell.exe -ExecutionPolicy Bypass -File .\CodexProviderSwitcher.ps1 -Mode g
 powershell.exe -ExecutionPolicy Bypass -File .\CodexProviderSwitcher.ps1 -Mode honkai
 powershell.exe -ExecutionPolicy Bypass -File .\CodexProviderSwitcher.ps1 -Mode ds
 ```
+
+需要直接以英文界面启动时：
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File .\CodexProviderSwitcher.ps1 -Language en
+```
+
+不指定 `-Language` 时默认使用 `zh-CN`。
 
 别名对应关系：
 
@@ -344,7 +355,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Switcher.ps
 预期输出：
 
 ```text
-PASS: syntax, quota reader packaging, aliases, provider/model routing, unrelated config preservation, and backups.
+PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/model routing, unrelated config preservation, and backups.
 ```
 
 真实线路验收清单：

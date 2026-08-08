@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidateSet('gui', 'official', 'gpt', 'honkai', 'honknet', 'deepseek', 'ds', 'status')]
     [string]$Mode = 'gui',
     [string]$ConfigPath = (Join-Path $env:USERPROFILE '.codex\config.toml'),
@@ -6,6 +6,8 @@ param(
     [string]$RateLimitsPath = (Join-Path $PSScriptRoot 'Get-CodexRateLimits.ps1'),
     [ValidateRange(15, 3600)]
     [int]$QuotaRefreshSeconds = 60,
+    [ValidateSet('zh-CN', 'en')]
+    [string]$Language = 'zh-CN',
     [switch]$NoRestart
 )
 
@@ -282,8 +284,104 @@ function Show-Switcher {
     [Windows.Forms.Application]::EnableVisualStyles()
 
     $definitions = Get-Providers
+    $uiState = @{ Language = $Language }
+    $strings = @{
+        'zh-CN' = @{
+            FormTitle = 'Codex 三线路切换器'
+            Title = 'Codex 线路切换器'
+            LanguageButton = 'English'
+            CurrentStatus = '当前线路：{0}    模型：{1}'
+            Hint = "切换前请保存当前任务。`r`nCodex 重启后请新建任务。"
+            OfficialButton = 'GPT 官方'
+            HonknetButton = 'Honknet'
+            DeepSeekButton = 'DeepSeek'
+            LegacySuffix = '（旧配置）'
+            Health = 'Honknet 密钥：{0}    DeepSeek 密钥：{1}    模型目录：{2}'
+            Ready = '已配置'
+            Missing = '未配置'
+            CatalogReady = '可用'
+            CatalogMissing = '缺失'
+            ConfirmTitle = '确认切换线路'
+            ConfirmMessage = "确定切换到 {0} 吗？`r`n`r`n请先保存当前任务，重启后新建任务。"
+            SwitchDoneTitle = '切换完成'
+            SwitchDone = '线路已切换。请在 Codex 中新建任务。'
+            SwitchFailedTitle = '切换失败'
+            FriendlyLoginMissing = '未检测到 OpenAI 官方登录。请先登录 Codex。'
+            FriendlyKeyMissing = '所选线路的 Windows 用户环境变量未配置，请重新运行安装程序或手动配置。'
+            FriendlyCatalogMissing = '所选模型的模型目录缺失或配置不正确。'
+            FriendlyConfigMissing = '未找到 Codex 配置文件，请先启动并登录一次 Codex。'
+            FriendlyFailure = '切换失败：{0}'
+            QuotaTitle = '官方 Codex 额度'
+            Refresh = '刷新'
+            Checking = '检测中...'
+            QuotaChecking = '官方 Codex 剩余量：检测中...'
+            QuotaRemaining = '官方 Codex 剩余量：{0:0.#}%'
+            QuotaUnavailable = '官方 Codex 剩余量：暂不可用'
+            ResetWaiting = '重置时间：等待官方账号数据'
+            ResetAt = '重置时间：{0}'
+            ResetUnknown = '重置时间：未知'
+            ResetNotReported = '重置时间：官方未返回'
+            AutoRefresh = '自动刷新：每 {0} 秒'
+            RelayAvailable = "官方额度已恢复，可以切回 GPT 官方。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            QuotaExhausted = "官方额度已用完，可继续使用中转线路等待重置。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            QuotaAvailable = "官方额度可用。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            ErrorReaderMissing = '未找到额度读取器，请重新安装本工具。'
+            ErrorParseFailed = '无法解析官方额度数据。'
+            ErrorTimedOut = '官方额度查询超时。'
+            ErrorCheckFailed = '官方额度查询失败，请稍后重试。'
+            ErrorStatus = "{0}`r`n线路切换功能仍可正常使用。"
+            Privacy = '密钥仅从 Windows 环境变量读取；切换前会自动备份配置。'
+        }
+        'en' = @{
+            FormTitle = 'Codex Three-Provider Switcher'
+            Title = 'Codex Provider Switcher'
+            LanguageButton = '中文'
+            CurrentStatus = 'Current provider: {0}    Model: {1}'
+            Hint = "Save the current task before switching.`r`nCreate a new task after Codex restarts."
+            OfficialButton = 'GPT Official'
+            HonknetButton = 'Honknet'
+            DeepSeekButton = 'DeepSeek'
+            LegacySuffix = ' (legacy)'
+            Health = 'Honknet Key: {0}    DeepSeek Key: {1}    Catalog: {2}'
+            Ready = 'Ready'
+            Missing = 'Missing'
+            CatalogReady = 'Ready'
+            CatalogMissing = 'Missing'
+            ConfirmTitle = 'Confirm provider switch'
+            ConfirmMessage = "Switch to {0}?`r`n`r`nSave the current task first. Create a new task after restart."
+            SwitchDoneTitle = 'Done'
+            SwitchDone = 'Switch complete. Create a new task in Codex.'
+            SwitchFailedTitle = 'Switch failed'
+            FriendlyLoginMissing = 'Official OpenAI login was not found. Sign in to Codex first.'
+            FriendlyKeyMissing = 'The Windows user environment variable for this provider is missing. Run the installer or configure it manually.'
+            FriendlyCatalogMissing = 'The model catalog for the selected model is missing or invalid.'
+            FriendlyConfigMissing = 'The Codex config file was not found. Start and sign in to Codex first.'
+            FriendlyFailure = 'Switch failed: {0}'
+            QuotaTitle = 'Official Codex quota'
+            Refresh = 'Refresh'
+            Checking = 'Checking...'
+            QuotaChecking = 'Official Codex remaining: Checking...'
+            QuotaRemaining = 'Official Codex remaining: {0:0.#}%'
+            QuotaUnavailable = 'Official Codex remaining: Unavailable'
+            ResetWaiting = 'Resets: Waiting for official account data'
+            ResetAt = 'Resets: {0}'
+            ResetUnknown = 'Resets: Unknown'
+            ResetNotReported = 'Resets: Not reported'
+            AutoRefresh = 'Auto refresh: every {0} seconds'
+            RelayAvailable = "Official quota is available. You can switch back to GPT Official.`r`nUpdated {0}; auto refresh every {1} seconds."
+            QuotaExhausted = "Official quota is exhausted. Keep using a relay until reset.`r`nUpdated {0}; auto refresh every {1} seconds."
+            QuotaAvailable = "Official quota is available.`r`nUpdated {0}; auto refresh every {1} seconds."
+            ErrorReaderMissing = 'Quota reader was not found. Reinstall this tool.'
+            ErrorParseFailed = 'The official quota response could not be parsed.'
+            ErrorTimedOut = 'Official quota check timed out.'
+            ErrorCheckFailed = 'Official quota check failed. Try again later.'
+            ErrorStatus = "{0}`r`nThe provider switcher remains available."
+            Privacy = 'Keys come only from Windows environment variables. Config is backed up.'
+        }
+    }
+    $text = { param([string]$Key) [string]$strings[$uiState.Language][$Key] }
+
     $form = New-Object Windows.Forms.Form
-    $form.Text = 'Codex Three-Provider Switcher'
     $form.ClientSize = New-Object Drawing.Size(680, 500)
     $form.StartPosition = 'CenterScreen'
     $form.FormBorderStyle = 'FixedDialog'
@@ -291,11 +389,15 @@ function Show-Switcher {
     $form.Font = New-Object Drawing.Font('Microsoft YaHei UI', 10)
 
     $title = New-Object Windows.Forms.Label
-    $title.Text = 'Codex Provider Switcher'
     $title.Font = New-Object Drawing.Font('Microsoft YaHei UI', 19, [Drawing.FontStyle]::Bold)
     $title.AutoSize = $true
     $title.Location = New-Object Drawing.Point(30, 24)
     $form.Controls.Add($title)
+
+    $languageButton = New-Object Windows.Forms.Button
+    $languageButton.Size = New-Object Drawing.Size(88, 32)
+    $languageButton.Location = New-Object Drawing.Point(559, 24)
+    $form.Controls.Add($languageButton)
 
     $status = New-Object Windows.Forms.Label
     $status.AutoSize = $true
@@ -303,46 +405,28 @@ function Show-Switcher {
     $form.Controls.Add($status)
 
     $hint = New-Object Windows.Forms.Label
-    $hint.Text = "Save the current task before switching.`r`nCreate a new task after Codex restarts."
     $hint.Size = New-Object Drawing.Size(610, 44)
     $hint.Location = New-Object Drawing.Point(33, 112)
     $form.Controls.Add($hint)
 
     $buttonSpecs = @(
-        @{ Text = $definitions.official.display_name; Provider = 'official'; X = 33; Color = [Drawing.Color]::FromArgb(16, 163, 127) },
-        @{ Text = $definitions.honknet.display_name; Provider = 'honknet'; X = 251; Color = [Drawing.Color]::FromArgb(37, 99, 235) },
-        @{ Text = $definitions.deepseek.display_name; Provider = 'deepseek'; X = 469; Color = [Drawing.Color]::FromArgb(109, 40, 217) }
+        @{ TextKey = 'OfficialButton'; Provider = 'official'; X = 33; Color = [Drawing.Color]::FromArgb(16, 163, 127) },
+        @{ TextKey = 'HonknetButton'; Provider = 'honknet'; X = 251; Color = [Drawing.Color]::FromArgb(37, 99, 235) },
+        @{ TextKey = 'DeepSeekButton'; Provider = 'deepseek'; X = 469; Color = [Drawing.Color]::FromArgb(109, 40, 217) }
     )
 
-    $refresh = {
-        $state = Get-CurrentState
-        $status.Text = "Current provider: $($state.Display)    Model: $($state.Model)"
-        $honkReady = Get-KeyPresent ([string]$definitions.honknet.env_key)
-        $dsReady = Get-KeyPresent ([string]$definitions.deepseek.env_key)
-        $catalogReady = Test-Catalog $definitions.deepseek
-        $health.Text = "Honknet Key: $(if ($honkReady) {'Ready'} else {'Missing'})    DeepSeek Key: $(if ($dsReady) {'Ready'} else {'Missing'})    Catalog: $(if ($catalogReady) {'Ready'} else {'Missing'})"
-        $health.ForeColor = if ($honkReady -and $dsReady -and $catalogReady) { [Drawing.Color]::ForestGreen } else { [Drawing.Color]::Firebrick }
-    }
+    $providerButtons = @{}
 
     foreach ($spec in $buttonSpecs) {
         $button = New-Object Windows.Forms.Button
-        $button.Text = $spec.Text
         $button.Tag = $spec.Provider
         $button.Size = New-Object Drawing.Size(178, 62)
         $button.Location = New-Object Drawing.Point($spec.X, 160)
         $button.BackColor = $spec.Color
         $button.ForeColor = [Drawing.Color]::White
         $button.FlatStyle = 'Flat'
-        $button.Add_Click({
-            try {
-                if (Set-CodexProvider ([string]$this.Tag) $true) {
-                    & $refresh
-                    [Windows.Forms.MessageBox]::Show('Switch complete. Create a new task in Codex.', 'Done', 'OK', 'Information') | Out-Null
-                }
-            }
-            catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message, 'Switch failed', 'OK', 'Error') | Out-Null }
-        })
         $form.Controls.Add($button)
+        $providerButtons[$spec.Provider] = $button
     }
 
     $health = New-Object Windows.Forms.Label
@@ -352,20 +436,17 @@ function Show-Switcher {
     $form.Controls.Add($health)
 
     $quotaTitle = New-Object Windows.Forms.Label
-    $quotaTitle.Text = 'Official Codex quota'
     $quotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
     $quotaTitle.AutoSize = $true
     $quotaTitle.Location = New-Object Drawing.Point(33, 286)
     $form.Controls.Add($quotaTitle)
 
     $refreshQuotaButton = New-Object Windows.Forms.Button
-    $refreshQuotaButton.Text = 'Refresh'
     $refreshQuotaButton.Size = New-Object Drawing.Size(88, 32)
     $refreshQuotaButton.Location = New-Object Drawing.Point(559, 280)
     $form.Controls.Add($refreshQuotaButton)
 
     $quotaPercent = New-Object Windows.Forms.Label
-    $quotaPercent.Text = 'Official Codex remaining: Checking...'
     $quotaPercent.AutoSize = $true
     $quotaPercent.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
     $quotaPercent.Location = New-Object Drawing.Point(33, 322)
@@ -384,13 +465,11 @@ function Show-Switcher {
     $quotaTrack.Controls.Add($quotaFill)
 
     $quotaReset = New-Object Windows.Forms.Label
-    $quotaReset.Text = 'Resets: Waiting for official account data'
     $quotaReset.AutoSize = $true
     $quotaReset.Location = New-Object Drawing.Point(33, 382)
     $form.Controls.Add($quotaReset)
 
     $quotaStatus = New-Object Windows.Forms.Label
-    $quotaStatus.Text = "Auto refresh: every $QuotaRefreshSeconds seconds"
     $quotaStatus.AutoSize = $false
     $quotaStatus.Size = New-Object Drawing.Size(614, 34)
     $quotaStatus.Location = New-Object Drawing.Point(33, 412)
@@ -398,7 +477,6 @@ function Show-Switcher {
     $form.Controls.Add($quotaStatus)
 
     $privacy = New-Object Windows.Forms.Label
-    $privacy.Text = 'Keys come only from Windows environment variables. Config is backed up.'
     $privacy.ForeColor = [Drawing.Color]::DimGray
     $privacy.AutoSize = $false
     $privacy.Size = New-Object Drawing.Size(610, 30)
@@ -412,25 +490,46 @@ function Show-Switcher {
         StartedAt = $null
         TimedOut = $false
         LastRemaining = $null
+        LastData = $null
+        ErrorKey = $null
+        IsChecking = $false
     }
 
-    $showQuotaError = {
-        param([string]$Message)
-        $quotaPercent.Text = 'Official Codex remaining: Unavailable'
-        $quotaPercent.ForeColor = [Drawing.Color]::Firebrick
-        $quotaFill.Width = 1
-        $quotaFill.BackColor = [Drawing.Color]::Firebrick
-        $quotaReset.Text = 'Resets: Unknown'
-        $quotaStatus.Text = "$Message`r`nThe provider switcher remains available."
-        $quotaStatus.ForeColor = [Drawing.Color]::Firebrick
+    $getProviderDisplay = {
+        param($State)
+        switch ([string]$State.Provider) {
+            'openai' { & $text 'OfficialButton' }
+            'honknet' { & $text 'HonknetButton' }
+            'deepseek' { & $text 'DeepSeekButton' }
+            'custom' {
+                if ([string]$State.Display -match '\(legacy\)') {
+                    (& $text 'HonknetButton') + (& $text 'LegacySuffix')
+                }
+                else { [string]$State.Display }
+            }
+            default { [string]$State.Display }
+        }
     }
 
-    $applyQuotaJson = {
-        param([string]$Text)
-        try {
-            $data = $Text | ConvertFrom-Json
-            $remaining = [math]::Max(0, [math]::Min(100, [double]$data.codex_remaining_percent))
-            $quotaPercent.Text = ('Official Codex remaining: {0:0.#}%' -f $remaining)
+    $refresh = {
+        $state = Get-CurrentState
+        $status.Text = ((& $text 'CurrentStatus') -f (& $getProviderDisplay $state), $state.Model)
+        $honkReady = Get-KeyPresent ([string]$definitions.honknet.env_key)
+        $dsReady = Get-KeyPresent ([string]$definitions.deepseek.env_key)
+        $catalogReady = Test-Catalog $definitions.deepseek
+        $health.Text = ((& $text 'Health') -f `
+            $(if ($honkReady) { & $text 'Ready' } else { & $text 'Missing' }), `
+            $(if ($dsReady) { & $text 'Ready' } else { & $text 'Missing' }), `
+            $(if ($catalogReady) { & $text 'CatalogReady' } else { & $text 'CatalogMissing' }))
+        $health.ForeColor = if ($honkReady -and $dsReady -and $catalogReady) { [Drawing.Color]::ForestGreen } else { [Drawing.Color]::Firebrick }
+    }
+
+    $renderQuota = {
+        $refreshQuotaButton.Text = if ($quotaState.IsChecking) { & $text 'Checking' } else { & $text 'Refresh' }
+        if ($null -ne $quotaState.LastData) {
+            $data = $quotaState.LastData
+            $remaining = [double]$data.Remaining
+            $quotaPercent.Text = ((& $text 'QuotaRemaining') -f $remaining)
             $quotaFill.Width = [math]::Max(1, [int][math]::Round($quotaTrack.ClientSize.Width * $remaining / 100))
             $color = if ($remaining -gt 50) {
                 [Drawing.Color]::FromArgb(22, 163, 74)
@@ -443,44 +542,84 @@ function Show-Switcher {
             }
             $quotaPercent.ForeColor = $color
             $quotaFill.BackColor = $color
-
-            if (-not [string]::IsNullOrWhiteSpace([string]$data.codex_resets_at_local)) {
-                $reset = [DateTimeOffset]::Parse([string]$data.codex_resets_at_local).ToLocalTime()
-                $quotaReset.Text = "Resets: $($reset.ToString('yyyy-MM-dd HH:mm'))"
+            $quotaReset.Text = if ($null -ne $data.Reset) {
+                ((& $text 'ResetAt') -f $data.Reset.ToString('yyyy-MM-dd HH:mm'))
             }
-            else {
-                $quotaReset.Text = 'Resets: Not reported'
-            }
+            else { & $text 'ResetNotReported' }
 
-            $checked = [DateTimeOffset]::Parse([string]$data.checked_at).ToLocalTime()
             $current = Get-CurrentState
             if ($current.Provider -ne 'openai' -and $remaining -gt 0) {
-                $quotaStatus.Text = "Official quota is available. You can switch back to GPT Official.`r`nUpdated $($checked.ToString('HH:mm:ss')); auto refresh every $QuotaRefreshSeconds seconds."
+                $quotaStatus.Text = ((& $text 'RelayAvailable') -f $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
                 $quotaStatus.ForeColor = [Drawing.Color]::ForestGreen
             }
             elseif ($remaining -le 0) {
-                $quotaStatus.Text = "Official quota is exhausted. Keep using a relay until reset.`r`nUpdated $($checked.ToString('HH:mm:ss')); auto refresh every $QuotaRefreshSeconds seconds."
+                $quotaStatus.Text = ((& $text 'QuotaExhausted') -f $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
                 $quotaStatus.ForeColor = [Drawing.Color]::Firebrick
             }
             else {
-                $quotaStatus.Text = "Official quota is available.`r`nUpdated $($checked.ToString('HH:mm:ss')); auto refresh every $QuotaRefreshSeconds seconds."
+                $quotaStatus.Text = ((& $text 'QuotaAvailable') -f $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
                 $quotaStatus.ForeColor = [Drawing.Color]::ForestGreen
             }
+            return
+        }
+
+        if ($null -ne $quotaState.ErrorKey) {
+            $quotaPercent.Text = & $text 'QuotaUnavailable'
+            $quotaPercent.ForeColor = [Drawing.Color]::Firebrick
+            $quotaFill.Width = 1
+            $quotaFill.BackColor = [Drawing.Color]::Firebrick
+            $quotaReset.Text = & $text 'ResetUnknown'
+            $quotaStatus.Text = ((& $text 'ErrorStatus') -f (& $text $quotaState.ErrorKey))
+            $quotaStatus.ForeColor = [Drawing.Color]::Firebrick
+            return
+        }
+
+        $quotaPercent.Text = & $text 'QuotaChecking'
+        $quotaPercent.ForeColor = [Drawing.Color]::DimGray
+        $quotaFill.Width = 1
+        $quotaFill.BackColor = [Drawing.Color]::FromArgb(156, 163, 175)
+        $quotaReset.Text = & $text 'ResetWaiting'
+        $quotaStatus.Text = ((& $text 'AutoRefresh') -f $QuotaRefreshSeconds)
+        $quotaStatus.ForeColor = [Drawing.Color]::DimGray
+    }
+
+    $showQuotaError = {
+        param([string]$ErrorKey)
+        $quotaState.LastData = $null
+        $quotaState.ErrorKey = $ErrorKey
+        $quotaState.IsChecking = $false
+        & $renderQuota
+    }
+
+    $applyQuotaJson = {
+        param([string]$JsonText)
+        try {
+            $data = $JsonText | ConvertFrom-Json
+            $remaining = [math]::Max(0, [math]::Min(100, [double]$data.codex_remaining_percent))
+            $checked = [DateTimeOffset]::Parse([string]$data.checked_at).ToLocalTime()
+            $reset = if (-not [string]::IsNullOrWhiteSpace([string]$data.codex_resets_at_local)) {
+                [DateTimeOffset]::Parse([string]$data.codex_resets_at_local).ToLocalTime()
+            }
+            else { $null }
 
             if ($null -ne $quotaState.LastRemaining -and [double]$quotaState.LastRemaining -le 0 -and $remaining -gt 0) {
                 [System.Media.SystemSounds]::Asterisk.Play()
             }
             $quotaState.LastRemaining = $remaining
+            $quotaState.LastData = [pscustomobject]@{ Remaining = $remaining; Reset = $reset; Checked = $checked }
+            $quotaState.ErrorKey = $null
+            $quotaState.IsChecking = $false
+            & $renderQuota
         }
         catch {
-            & $showQuotaError "Quota response could not be parsed: $($_.Exception.Message)"
+            & $showQuotaError 'ErrorParseFailed'
         }
     }
 
     $startQuotaRefresh = {
         if ($null -ne $quotaState.Process -and -not $quotaState.Process.HasExited) { return }
         if (-not (Test-Path -LiteralPath $RateLimitsPath)) {
-            & $showQuotaError "Quota reader not found: $RateLimitsPath"
+            & $showQuotaError 'ErrorReaderMissing'
             return
         }
 
@@ -500,8 +639,9 @@ function Show-Switcher {
         $quotaState.ErrorTask = $process.StandardError.ReadLineAsync()
         $quotaState.StartedAt = [DateTimeOffset]::Now
         $quotaState.TimedOut = $false
+        $quotaState.IsChecking = $true
         $refreshQuotaButton.Enabled = $false
-        $refreshQuotaButton.Text = 'Checking...'
+        & $renderQuota
     }
 
     $quotaPollTimer = New-Object Windows.Forms.Timer
@@ -518,7 +658,6 @@ function Show-Switcher {
             $process.Dispose()
             $quotaState.Process = $null
             $refreshQuotaButton.Enabled = $true
-            $refreshQuotaButton.Text = 'Refresh'
             & $applyQuotaJson $stdout
             return
         }
@@ -536,14 +675,13 @@ function Show-Switcher {
         $process.Dispose()
         $quotaState.Process = $null
         $refreshQuotaButton.Enabled = $true
-        $refreshQuotaButton.Text = 'Refresh'
+        $quotaState.IsChecking = $false
 
         if ($quotaState.TimedOut) {
-            & $showQuotaError 'Official quota check timed out.'
+            & $showQuotaError 'ErrorTimedOut'
         }
         elseif ($exitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
-            $detail = if ([string]::IsNullOrWhiteSpace($stderr)) { 'No data returned.' } else { $stderr.Trim() }
-            & $showQuotaError "Official quota check failed: $detail"
+            & $showQuotaError 'ErrorCheckFailed'
         }
         else {
             & $applyQuotaJson $stdout
@@ -555,6 +693,73 @@ function Show-Switcher {
     $quotaAutoTimer.Add_Tick({ & $startQuotaRefresh })
     $refreshQuotaButton.Add_Click({ & $startQuotaRefresh })
 
+    foreach ($providerButton in $providerButtons.Values) {
+        $providerButton.Add_Click({
+            $provider = [string]$this.Tag
+            $providerLabel = switch ($provider) {
+                'official' { & $text 'OfficialButton' }
+                'honknet' { & $text 'HonknetButton' }
+                'deepseek' { & $text 'DeepSeekButton' }
+            }
+            $answer = [Windows.Forms.MessageBox]::Show(
+                ((& $text 'ConfirmMessage') -f $providerLabel),
+                (& $text 'ConfirmTitle'),
+                [Windows.Forms.MessageBoxButtons]::OKCancel,
+                [Windows.Forms.MessageBoxIcon]::Warning
+            )
+            if ($answer -ne [Windows.Forms.DialogResult]::OK) { return }
+            try {
+                if (Set-CodexProvider $provider $false) {
+                    & $refresh
+                    & $renderQuota
+                    [Windows.Forms.MessageBox]::Show(
+                        (& $text 'SwitchDone'),
+                        (& $text 'SwitchDoneTitle'),
+                        [Windows.Forms.MessageBoxButtons]::OK,
+                        [Windows.Forms.MessageBoxIcon]::Information
+                    ) | Out-Null
+                }
+            }
+            catch {
+                $message = if ($uiState.Language -eq 'zh-CN') {
+                    switch -Regex ($_.Exception.Message) {
+                        'Official OpenAI login' { & $text 'FriendlyLoginMissing'; break }
+                        'environment variable' { & $text 'FriendlyKeyMissing'; break }
+                        'model catalog' { & $text 'FriendlyCatalogMissing'; break }
+                        'Config file not found' { & $text 'FriendlyConfigMissing'; break }
+                        default { ((& $text 'FriendlyFailure') -f $_.Exception.Message) }
+                    }
+                }
+                else { $_.Exception.Message }
+                [Windows.Forms.MessageBox]::Show(
+                    $message,
+                    (& $text 'SwitchFailedTitle'),
+                    [Windows.Forms.MessageBoxButtons]::OK,
+                    [Windows.Forms.MessageBoxIcon]::Error
+                ) | Out-Null
+            }
+        })
+    }
+
+    $updateLanguage = {
+        $form.Text = & $text 'FormTitle'
+        $title.Text = & $text 'Title'
+        $languageButton.Text = & $text 'LanguageButton'
+        $hint.Text = & $text 'Hint'
+        $providerButtons['official'].Text = & $text 'OfficialButton'
+        $providerButtons['honknet'].Text = & $text 'HonknetButton'
+        $providerButtons['deepseek'].Text = & $text 'DeepSeekButton'
+        $quotaTitle.Text = & $text 'QuotaTitle'
+        $privacy.Text = & $text 'Privacy'
+        & $refresh
+        & $renderQuota
+    }
+
+    $languageButton.Add_Click({
+        $uiState.Language = if ($uiState.Language -eq 'zh-CN') { 'en' } else { 'zh-CN' }
+        & $updateLanguage
+    })
+
     $form.Add_FormClosing({
         $quotaAutoTimer.Stop()
         $quotaPollTimer.Stop()
@@ -563,7 +768,7 @@ function Show-Switcher {
         }
     })
 
-    & $refresh
+    & $updateLanguage
     $quotaPollTimer.Start()
     $quotaAutoTimer.Start()
     & $startQuotaRefresh
