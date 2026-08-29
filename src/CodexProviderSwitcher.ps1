@@ -4,6 +4,7 @@
     [string]$ConfigPath = (Join-Path $env:USERPROFILE '.codex\config.toml'),
     [string]$ProvidersPath = (Join-Path $PSScriptRoot 'providers.json'),
     [string]$RateLimitsPath = (Join-Path $PSScriptRoot 'Get-CodexRateLimits.ps1'),
+    [string]$DeepSeekBalancePath = (Join-Path $PSScriptRoot 'Get-DeepSeekBalance.ps1'),
     [ValidateRange(15, 3600)]
     [int]$QuotaRefreshSeconds = 60,
     [ValidateSet('zh-CN', 'en')]
@@ -330,6 +331,20 @@ function Show-Switcher {
             ErrorTimedOut = '官方额度查询超时。'
             ErrorCheckFailed = '官方额度查询失败，请稍后重试。'
             ErrorStatus = "{0}`r`n线路切换功能仍可正常使用。"
+            DeepSeekQuotaTitle = 'DeepSeek 余额'
+            DeepSeekBalance = 'DeepSeek 余额：{0:N2} {1}'
+            DeepSeekChecking = 'DeepSeek 余额：检测中...'
+            DeepSeekUnavailable = 'DeepSeek 余额：暂不可用'
+            DeepSeekBreakdown = '充值：{0:N2} {1}    赠送：{2:N2} {3}'
+            DeepSeekStatusAvailable = "DeepSeek 余额可用。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            DeepSeekStatusLow = "DeepSeek 余额不足，请及时充值。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            DeepSeekStatusBlocked = "DeepSeek 余额不可用于 API 调用。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            DeepSeekMissingKey = 'DeepSeek 密钥未配置，无法查询余额。'
+            DeepSeekErrorReaderMissing = '未找到 DeepSeek 余额读取器，请重新安装本工具。'
+            DeepSeekErrorParseFailed = '无法解析 DeepSeek 余额数据。'
+            DeepSeekErrorTimedOut = 'DeepSeek 余额查询超时。'
+            DeepSeekErrorCheckFailed = 'DeepSeek 余额查询失败，请检查 DeepSeek Key 和网络。'
+            DeepSeekErrorStatus = "{0}`r`n线路切换功能仍可正常使用。"
             Privacy = '密钥仅从 Windows 环境变量读取；切换前会自动备份配置。'
         }
         'en' = @{
@@ -376,13 +391,27 @@ function Show-Switcher {
             ErrorTimedOut = 'Official quota check timed out.'
             ErrorCheckFailed = 'Official quota check failed. Try again later.'
             ErrorStatus = "{0}`r`nThe provider switcher remains available."
+            DeepSeekQuotaTitle = 'DeepSeek Balance'
+            DeepSeekBalance = 'DeepSeek balance: {0:N2} {1}'
+            DeepSeekChecking = 'DeepSeek balance: Checking...'
+            DeepSeekUnavailable = 'DeepSeek balance: Unavailable'
+            DeepSeekBreakdown = 'Topped up: {0:N2} {1}    Granted: {2:N2} {3}'
+            DeepSeekStatusAvailable = "DeepSeek balance is available.`r`nUpdated {0}; auto refresh every {1} seconds."
+            DeepSeekStatusLow = "DeepSeek balance is low. Add credits soon.`r`nUpdated {0}; auto refresh every {1} seconds."
+            DeepSeekStatusBlocked = "DeepSeek balance cannot be used for API calls.`r`nUpdated {0}; auto refresh every {1} seconds."
+            DeepSeekMissingKey = 'DeepSeek API key is not configured. Balance query is unavailable.'
+            DeepSeekErrorReaderMissing = 'DeepSeek balance reader was not found. Reinstall this tool.'
+            DeepSeekErrorParseFailed = 'The DeepSeek balance response could not be parsed.'
+            DeepSeekErrorTimedOut = 'DeepSeek balance check timed out.'
+            DeepSeekErrorCheckFailed = 'DeepSeek balance check failed. Check the key and network.'
+            DeepSeekErrorStatus = "{0}`r`nThe provider switcher remains available."
             Privacy = 'Keys come only from Windows environment variables. Config is backed up.'
         }
     }
     $text = { param([string]$Key) [string]$strings[$uiState.Language][$Key] }
 
     $form = New-Object Windows.Forms.Form
-    $form.ClientSize = New-Object Drawing.Size(680, 500)
+    $form.ClientSize = New-Object Drawing.Size(680, 650)
     $form.StartPosition = 'CenterScreen'
     $form.FormBorderStyle = 'FixedDialog'
     $form.MaximizeBox = $false
@@ -476,11 +505,36 @@ function Show-Switcher {
     $quotaStatus.ForeColor = [Drawing.Color]::DimGray
     $form.Controls.Add($quotaStatus)
 
+    $deepseekQuotaTitle = New-Object Windows.Forms.Label
+    $deepseekQuotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
+    $deepseekQuotaTitle.AutoSize = $true
+    $deepseekQuotaTitle.Location = New-Object Drawing.Point(33, 464)
+    $form.Controls.Add($deepseekQuotaTitle)
+
+    $deepseekBalance = New-Object Windows.Forms.Label
+    $deepseekBalance.AutoSize = $true
+    $deepseekBalance.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
+    $deepseekBalance.Location = New-Object Drawing.Point(33, 500)
+    $form.Controls.Add($deepseekBalance)
+
+    $deepseekBreakdown = New-Object Windows.Forms.Label
+    $deepseekBreakdown.AutoSize = $true
+    $deepseekBreakdown.Location = New-Object Drawing.Point(33, 531)
+    $deepseekBreakdown.ForeColor = [Drawing.Color]::DimGray
+    $form.Controls.Add($deepseekBreakdown)
+
+    $deepseekStatus = New-Object Windows.Forms.Label
+    $deepseekStatus.AutoSize = $false
+    $deepseekStatus.Size = New-Object Drawing.Size(614, 34)
+    $deepseekStatus.Location = New-Object Drawing.Point(33, 559)
+    $deepseekStatus.ForeColor = [Drawing.Color]::DimGray
+    $form.Controls.Add($deepseekStatus)
+
     $privacy = New-Object Windows.Forms.Label
     $privacy.ForeColor = [Drawing.Color]::DimGray
     $privacy.AutoSize = $false
     $privacy.Size = New-Object Drawing.Size(610, 30)
-    $privacy.Location = New-Object Drawing.Point(33, 462)
+    $privacy.Location = New-Object Drawing.Point(33, 606)
     $form.Controls.Add($privacy)
 
     $quotaState = @{
@@ -490,6 +544,17 @@ function Show-Switcher {
         StartedAt = $null
         TimedOut = $false
         LastRemaining = $null
+        LastData = $null
+        ErrorKey = $null
+        IsChecking = $false
+    }
+
+    $deepseekState = @{
+        Process = $null
+        OutputTask = $null
+        ErrorTask = $null
+        StartedAt = $null
+        TimedOut = $false
         LastData = $null
         ErrorKey = $null
         IsChecking = $false
@@ -688,10 +753,172 @@ function Show-Switcher {
         }
     })
 
+    $renderDeepSeek = {
+        if ($null -ne $deepseekState.LastData) {
+            $data = $deepseekState.LastData
+            $currency = [string]$data.Currency
+            $deepseekBalance.Text = ((& $text 'DeepSeekBalance') -f $data.TotalBalance, $currency)
+            $deepseekBreakdown.Text = ((& $text 'DeepSeekBreakdown') -f `
+                $data.ToppedUpBalance, $currency, $data.GrantedBalance, $currency)
+
+            $lowThreshold = if ($currency -eq 'CNY') { 10d }
+            elseif ($currency -eq 'USD') { 1d }
+            else { 0d }
+            if (-not $data.IsAvailable) {
+                $deepseekBalance.ForeColor = [Drawing.Color]::Firebrick
+                $deepseekStatus.Text = ((& $text 'DeepSeekStatusBlocked') -f `
+                    $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
+                $deepseekStatus.ForeColor = [Drawing.Color]::Firebrick
+            }
+            elseif ($data.TotalBalance -le 0 -or $data.TotalBalance -le $lowThreshold) {
+                $deepseekBalance.ForeColor = [Drawing.Color]::FromArgb(217, 119, 6)
+                $deepseekStatus.Text = ((& $text 'DeepSeekStatusLow') -f `
+                    $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
+                $deepseekStatus.ForeColor = [Drawing.Color]::FromArgb(217, 119, 6)
+            }
+            else {
+                $deepseekBalance.ForeColor = [Drawing.Color]::FromArgb(22, 163, 74)
+                $deepseekStatus.Text = ((& $text 'DeepSeekStatusAvailable') -f `
+                    $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
+                $deepseekStatus.ForeColor = [Drawing.Color]::FromArgb(22, 163, 74)
+            }
+            return
+        }
+
+        if ($null -ne $deepseekState.ErrorKey) {
+            $deepseekBalance.Text = & $text 'DeepSeekUnavailable'
+            $deepseekBalance.ForeColor = [Drawing.Color]::Firebrick
+            $deepseekBreakdown.Text = ''
+            $deepseekStatus.Text = ((& $text 'DeepSeekErrorStatus') -f (& $text $deepseekState.ErrorKey))
+            $deepseekStatus.ForeColor = [Drawing.Color]::Firebrick
+            return
+        }
+
+        $deepseekBalance.Text = & $text 'DeepSeekChecking'
+        $deepseekBalance.ForeColor = [Drawing.Color]::DimGray
+        $deepseekBreakdown.Text = ''
+        $deepseekStatus.Text = ((& $text 'AutoRefresh') -f $QuotaRefreshSeconds)
+        $deepseekStatus.ForeColor = [Drawing.Color]::DimGray
+    }
+
+    $showDeepSeekError = {
+        param([string]$ErrorKey)
+        $deepseekState.LastData = $null
+        $deepseekState.ErrorKey = $ErrorKey
+        $deepseekState.IsChecking = $false
+        & $renderDeepSeek
+    }
+
+    $applyDeepSeekJson = {
+        param([string]$JsonText)
+        try {
+            $data = $JsonText | ConvertFrom-Json
+            $total = [decimal]$data.total_balance
+            $granted = [decimal]$data.granted_balance
+            $toppedUp = [decimal]$data.topped_up_balance
+            if ($total -lt 0) { $total = 0d }
+            if ($granted -lt 0) { $granted = 0d }
+            if ($toppedUp -lt 0) { $toppedUp = 0d }
+            $checked = [DateTimeOffset]::Parse([string]$data.checked_at).ToLocalTime()
+            $deepseekState.LastData = [pscustomobject]@{
+                TotalBalance = $total
+                GrantedBalance = $granted
+                ToppedUpBalance = $toppedUp
+                Currency = [string]$data.currency
+                IsAvailable = [bool]$data.is_available
+                Checked = $checked
+            }
+            $deepseekState.ErrorKey = $null
+            $deepseekState.IsChecking = $false
+            & $renderDeepSeek
+        }
+        catch {
+            & $showDeepSeekError 'DeepSeekErrorParseFailed'
+        }
+    }
+
+    $startDeepSeekRefresh = {
+        if ($null -ne $deepseekState.Process -and -not $deepseekState.Process.HasExited) { return }
+        if (-not (Test-Path -LiteralPath $DeepSeekBalancePath)) {
+            & $showDeepSeekError 'DeepSeekErrorReaderMissing'
+            return
+        }
+        if (-not (Get-KeyPresent ([string]$definitions.deepseek.env_key))) {
+            & $showDeepSeekError 'DeepSeekMissingKey'
+            return
+        }
+
+        $startInfo = New-Object Diagnostics.ProcessStartInfo
+        $startInfo.FileName = (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
+        $startInfo.Arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$DeepSeekBalancePath`" -Json -TimeoutSeconds 8"
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.CreateNoWindow = $true
+
+        $process = New-Object Diagnostics.Process
+        $process.StartInfo = $startInfo
+        [void]$process.Start()
+        $deepseekState.Process = $process
+        $deepseekState.OutputTask = $process.StandardOutput.ReadLineAsync()
+        $deepseekState.ErrorTask = $process.StandardError.ReadLineAsync()
+        $deepseekState.StartedAt = [DateTimeOffset]::Now
+        $deepseekState.TimedOut = $false
+        $deepseekState.IsChecking = $true
+        $refreshQuotaButton.Enabled = $false
+        & $renderDeepSeek
+    }
+
+    $deepseekPollTimer = New-Object Windows.Forms.Timer
+    $deepseekPollTimer.Interval = 500
+    $deepseekPollTimer.Add_Tick({
+        $process = $deepseekState.Process
+        if ($null -eq $process) { return }
+        if ($deepseekState.OutputTask.IsCompleted -and -not [string]::IsNullOrWhiteSpace($deepseekState.OutputTask.Result)) {
+            $stdout = $deepseekState.OutputTask.Result
+            if (-not $process.HasExited) {
+                [void]$process.WaitForExit(1000)
+                if (-not $process.HasExited) { try { $process.Kill() } catch { } }
+            }
+            $process.Dispose()
+            $deepseekState.Process = $null
+            $refreshQuotaButton.Enabled = $true
+            & $applyDeepSeekJson $stdout
+            return
+        }
+        if (-not $process.HasExited) {
+            if (([DateTimeOffset]::Now - $deepseekState.StartedAt).TotalSeconds -gt 30) {
+                $deepseekState.TimedOut = $true
+                try { $process.Kill() } catch { }
+            }
+            return
+        }
+
+        $stdout = if ($deepseekState.OutputTask.IsCompleted) { $deepseekState.OutputTask.Result } else { '' }
+        $exitCode = $process.ExitCode
+        $process.Dispose()
+        $deepseekState.Process = $null
+        $refreshQuotaButton.Enabled = $true
+        $deepseekState.IsChecking = $false
+
+        if ($deepseekState.TimedOut) {
+            & $showDeepSeekError 'DeepSeekErrorTimedOut'
+        }
+        elseif ($exitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
+            & $showDeepSeekError 'DeepSeekErrorCheckFailed'
+        }
+        else {
+            & $applyDeepSeekJson $stdout
+        }
+    })
+
     $quotaAutoTimer = New-Object Windows.Forms.Timer
     $quotaAutoTimer.Interval = $QuotaRefreshSeconds * 1000
     $quotaAutoTimer.Add_Tick({ & $startQuotaRefresh })
-    $refreshQuotaButton.Add_Click({ & $startQuotaRefresh })
+    $deepseekAutoTimer = New-Object Windows.Forms.Timer
+    $deepseekAutoTimer.Interval = $QuotaRefreshSeconds * 1000
+    $deepseekAutoTimer.Add_Tick({ & $startDeepSeekRefresh })
+    $refreshQuotaButton.Add_Click({ & $startQuotaRefresh; & $startDeepSeekRefresh })
 
     foreach ($providerButton in $providerButtons.Values) {
         $providerButton.Add_Click({
@@ -712,6 +939,7 @@ function Show-Switcher {
                 if (Set-CodexProvider $provider $false) {
                     & $refresh
                     & $renderQuota
+                    & $renderDeepSeek
                     [Windows.Forms.MessageBox]::Show(
                         (& $text 'SwitchDone'),
                         (& $text 'SwitchDoneTitle'),
@@ -750,9 +978,11 @@ function Show-Switcher {
         $providerButtons['honknet'].Text = & $text 'HonknetButton'
         $providerButtons['deepseek'].Text = & $text 'DeepSeekButton'
         $quotaTitle.Text = & $text 'QuotaTitle'
+        $deepseekQuotaTitle.Text = & $text 'DeepSeekQuotaTitle'
         $privacy.Text = & $text 'Privacy'
         & $refresh
         & $renderQuota
+        & $renderDeepSeek
     }
 
     $languageButton.Add_Click({
@@ -763,15 +993,23 @@ function Show-Switcher {
     $form.Add_FormClosing({
         $quotaAutoTimer.Stop()
         $quotaPollTimer.Stop()
+        $deepseekAutoTimer.Stop()
+        $deepseekPollTimer.Stop()
         if ($null -ne $quotaState.Process -and -not $quotaState.Process.HasExited) {
             try { $quotaState.Process.Kill() } catch { }
+        }
+        if ($null -ne $deepseekState.Process -and -not $deepseekState.Process.HasExited) {
+            try { $deepseekState.Process.Kill() } catch { }
         }
     })
 
     & $updateLanguage
     $quotaPollTimer.Start()
+    $deepseekPollTimer.Start()
     $quotaAutoTimer.Start()
+    $deepseekAutoTimer.Start()
     & $startQuotaRefresh
+    & $startDeepSeekRefresh
     [void]$form.ShowDialog()
 }
 

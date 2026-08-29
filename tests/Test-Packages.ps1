@@ -42,7 +42,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
     $header = [IO.File]::ReadAllBytes($setup)
     if ($header[0] -ne 0x4D -or $header[1] -ne 0x5A) { throw 'Installer is not a Windows executable.' }
     $zipEntries = @(tar -tf $zip)
-    foreach ($expected in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'src/CodexProviderSwitcher.ps1', 'src/ConfigureProviderKeys.ps1')) {
+    foreach ($expected in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'src/CodexProviderSwitcher.ps1', 'src/Get-DeepSeekBalance.ps1', 'src/ConfigureProviderKeys.ps1')) {
         if (-not ($zipEntries -match [regex]::Escape($expected))) { throw "Portable archive entry is missing: $expected" }
     }
 
@@ -64,7 +64,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
             ) -PassThru -Wait
             if ($installer.ExitCode -ne 0) { throw "Installer exit code: $($installer.ExitCode)" }
 
-            foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json', 'unins000.exe')) {
+            foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json', 'unins000.exe')) {
                 if (-not (Test-Path -LiteralPath (Join-Path $installDir $file))) { throw "Installed file is missing: $file" }
             }
 

@@ -102,7 +102,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-MSIXPackagi
 - 简短描述和完整描述，中英文各一份。
 - 当前 README 中的最终效果截图，另补至少一张英文界面截图。
 - 1:1 应用图标、支持邮箱或 GitHub Issues 链接。
-- 隐私说明：Key 仅保存在当前 Windows 用户环境变量；不会上传到本项目服务器；应用会读取 Codex 本地配置和官方账号返回的额度数据。
+- 隐私说明：Key 仅保存在当前 Windows 用户环境变量；不会上传到本项目服务器；应用会读取 Codex 本地配置、官方 Codex 额度数据和 DeepSeek 官方余额接口返回的数据。
 - 年龄分级、类别、市场和定价。建议免费发布。
 
 不要在截图、认证备注或测试账号说明中填写真实 API Key。
@@ -114,12 +114,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-MSIXPackagi
 - 读取和更新 `%USERPROFILE%\.codex\config.toml`，并先创建备份。
 - 读取用户级 `HONKNET_API_KEY` 和 `DEEPSEEK_API_KEY` 环境变量。
 - 启动本机 Codex CLI 读取官方额度。
+- 调用 DeepSeek 官方余额接口展示 DeepSeek 余额。
 - 在用户确认切换后结束并重新启动 Codex Desktop。
 
 建议在 **Notes for certification** 粘贴以下英文说明，并附上可复现测试步骤：
 
 ```text
-This is a user-initiated configuration utility for Codex Desktop. The runFullTrust capability is required to back up and update the current user's .codex/config.toml, read user-scoped provider environment variables, invoke the locally installed Codex CLI for official quota display, and restart Codex Desktop after an explicit provider switch. The app never reads, copies, modifies, or distributes Codex auth.json credentials. Provider API keys are never included in the package or transmitted to the publisher.
+This is a user-initiated configuration utility for Codex Desktop. The runFullTrust capability is required to back up and update the current user's .codex/config.toml, read user-scoped provider environment variables, invoke the locally installed Codex CLI for official quota display, query the DeepSeek official balance API for DeepSeek balance display, and restart Codex Desktop after an explicit provider switch. The app never reads, copies, modifies, or distributes Codex auth.json credentials. Provider API keys are never included in the package or transmitted to the publisher.
 ```
 
 `runFullTrust` 会进入受限能力审核，声明并不保证通过。认证人员可能要求补充操作视频、测试步骤或缩小权限范围。

@@ -2,18 +2,20 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $script = Join-Path $repoRoot 'src\CodexProviderSwitcher.ps1'
 $rateLimitReader = Join-Path $repoRoot 'src\Get-CodexRateLimits.ps1'
+$deepSeekBalanceReader = Join-Path $repoRoot 'src\Get-DeepSeekBalance.ps1'
 $providers = Join-Path $repoRoot 'src\providers.json'
 $testRoot = Join-Path $env:TEMP ('codex-provider-switcher-test-' + [guid]::NewGuid().ToString('N'))
 [IO.Directory]::CreateDirectory($testRoot) | Out-Null
 
 try {
-    foreach ($scriptToParse in @($script, $rateLimitReader, (Join-Path $repoRoot 'Install.ps1'))) {
+    foreach ($scriptToParse in @($script, $rateLimitReader, $deepSeekBalanceReader, (Join-Path $repoRoot 'Install.ps1'))) {
         $tokens = $null
         $errors = $null
         [Management.Automation.Language.Parser]::ParseFile($scriptToParse, [ref]$tokens, [ref]$errors) | Out-Null
         if ($errors.Count -gt 0) { throw "PowerShell syntax errors in $scriptToParse" }
     }
     if (-not (Test-Path -LiteralPath $rateLimitReader)) { throw 'Rate-limit reader is missing.' }
+    if (-not (Test-Path -LiteralPath $deepSeekBalanceReader)) { throw 'DeepSeek balance reader is missing.' }
     $switcherBytes = [IO.File]::ReadAllBytes($script)
     if ($switcherBytes.Length -lt 3 -or $switcherBytes[0] -ne 0xEF -or $switcherBytes[1] -ne 0xBB -or $switcherBytes[2] -ne 0xBF) {
         throw 'The localized switcher must use UTF-8 with BOM for Windows PowerShell 5.1.'
@@ -68,7 +70,7 @@ command = "example"
 
     $backupCount = @(Get-ChildItem -LiteralPath (Join-Path $testRoot 'provider-switch-backups') -Filter '*.toml').Count
     if ($backupCount -ne 4) { throw "Expected 4 backups, found $backupCount" }
-    Write-Output 'PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/model routing, unrelated config preservation, and backups.'
+    Write-Output 'PASS: syntax, Chinese/English UI, quota readers, aliases, provider/model routing, unrelated config preservation, and backups.'
 }
 finally {
     $env:HONKNET_API_KEY = $null

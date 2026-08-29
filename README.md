@@ -56,7 +56,7 @@
 
 ![Codex 三线路切换器最终界面](docs/assets/codex-provider-switcher.png)
 
-面板默认显示中文；点击右上角的 `English` 可即时切换英文，再点击 `中文` 即可切回。界面会显示当前 provider、模型、两个第三方 Key 的配置状态以及 DeepSeek 模型目录状态。截图中的“已配置”只表示对应配置在本机可用，不包含或展示任何真实 Key。
+面板默认显示中文；点击右上角的 `English` 可即时切换英文，再点击 `中文` 即可切回。界面会显示当前 provider、模型、两个第三方 Key 的配置状态、DeepSeek 模型目录状态、官方 Codex 剩余额度以及 DeepSeek 余额。截图中的“已配置”只表示对应配置在本机可用，不包含或展示任何真实 Key。
 
 ## 为什么需要这个工具
 
@@ -91,6 +91,7 @@
 - 保留现有的插件、MCP、权限、features、projects 等其他配置。
 - 从 Windows 环境变量读取第三方 Key，不把 Key 写入仓库或 TOML。
 - 显示官方 Codex 剩余量、重置时间，并在窗口打开期间每 60 秒自动刷新。
+- 显示 DeepSeek 余额、充值余额、赠送余额和可用状态，并在窗口打开期间每 60 秒自动刷新。
 - 切换后重启 Codex Desktop；已有任务不会改变 provider，需要新建任务。
 
 ## 系统要求
@@ -108,6 +109,7 @@
 - Honknet 和 DeepSeek 线路需要你自己合法取得的 API Key。
 - 第三方服务端必须支持 Codex 使用的 Responses API。只支持 `chat/completions` 的接口不能直接使用本项目默认配置。
 - 官方额度显示需要 Node.js 和 npm 版 `@openai/codex` CLI；未安装时三路切换仍可使用，只有额度区域显示 `Unavailable`。
+- DeepSeek 余额显示使用官方公开的 `GET https://api.deepseek.com/user/balance`，只需配置 `DEEPSEEK_API_KEY`，不需要额外安装工具。
 
 检查 Codex CLI：
 
@@ -263,6 +265,7 @@ Codex Three-Provider Switcher
 - DeepSeek Key 是否存在。
 - DeepSeek 模型目录是否可用。
 - 官方 Codex 剩余百分比和重置时间。
+- DeepSeek 余额、充值余额、赠送余额和 API 可用状态。
 
 默认是中文界面。点击窗口右上角的 `English` 会立即切换全部面板文案、状态提示和弹窗；英文界面中点击 `中文` 可随时切回，不需要重启软件。
 
@@ -291,6 +294,16 @@ Official quota is available. You can switch back to GPT Official.
 本版本只显示和提示，不会自动替你切换 provider。确认额度恢复后，由你点击 `GPT Official`，等待客户端重启并新建任务。
 
 额度读取使用当前 Codex app-server 的 `account/rateLimits/read` 协议。官方公开文档承诺的查看方式是 [usage dashboard](https://chatgpt.com/codex/settings/usage) 和 CLI 会话中的 `/status`；如果后续 Codex 版本调整本地协议，额度区域会降级为 `Unavailable`，不会影响 provider 切换。
+
+### DeepSeek 余额显示
+
+窗口打开后会使用 `DEEPSEEK_API_KEY` 调用 DeepSeek 官方公开接口 `GET https://api.deepseek.com/user/balance`，显示总余额、充值余额、赠送余额和 API 可用状态，随后每 60 秒自动刷新。Key 不会写入 `config.toml` 或任何项目文件，也不会出现在命令行参数中。
+
+当余额低于小额阈值、归零或账号不可用时，DeepSeek 区域会显示红色或橙色提示；余额充足时显示绿色。本工具只显示和提示，不会自动切换 provider 或自动充值。
+
+DeepSeek 官方公开接口只提供余额，不提供网页 [usage](https://platform.deepseek.com/usage) 上的详细用量报表。平台网页用量接口属于登录态私有接口，本项目没有把它作为稳定依赖接入。
+
+也可以手动运行 `powershell.exe -ExecutionPolicy Bypass -File .\Get-DeepSeekBalance.ps1` 查看余额。
 
 自动刷新只在切换器窗口保持打开时运行。关闭窗口后不会安装后台服务或计划任务。
 
@@ -433,7 +446,19 @@ PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/mode
 3. 官方 Codex 账号是否已经登录。
 4. 点击 `Refresh` 重试，或使用官方 [usage dashboard](https://chatgpt.com/codex/settings/usage) 核对。
 
+如果 `codex --version` 报 `Missing optional dependency @openai/codex-win32-x64`，说明全局 `@openai/codex` 安装不完整；执行 `npm install -g @openai/codex@latest` 补齐 Windows 平台二进制后重试。
+
 查询器每个阶段最多等待 8 秒，失败后不会卡住主窗口，并会在下一次自动刷新时重试。
+
+### 显示 DeepSeek 余额不可用
+
+DeepSeek 余额查询只依赖 `DEEPSEEK_API_KEY`。依次检查：
+
+1. `DEEPSEEK_API_KEY` 是否已配置，且没有多余引号或空格。
+2. 网络是否可以访问 `https://api.deepseek.com/user/balance`。
+3. 点击 `Refresh` 重试；如果返回 `HTTP 401`，说明 Key 无效或已过期。
+
+DeepSeek 官方公开接口只返回余额；详细用量报表仍以 [usage](https://platform.deepseek.com/usage) 网页为准。
 
 ### 返回 `401` 或 `403`
 
@@ -515,6 +540,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1 -RemoveC
 |   |-- CodexProviderSwitcher.ps1
 |   |-- ConfigureProviderKeys.ps1
 |   |-- Get-CodexRateLimits.ps1
+|   |-- Get-DeepSeekBalance.ps1
 |   |-- providers.json
 |   `-- deepseek-model-catalog.json
 `-- tests

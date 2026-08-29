@@ -87,7 +87,7 @@ try {
     & $csc /nologo /target:winexe /platform:x64 /optimize+ /define:CONFIGURE_KEYS "/out:$(Join-Path $packageRoot 'CodexKeyConfigurator.exe')" $launcherSource
     if ($LASTEXITCODE -ne 0) { throw "C# compiler failed with exit code $LASTEXITCODE." }
 
-    foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
+    foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
         [IO.File]::Copy((Join-Path $repoRoot "src\$file"), (Join-Path $packageRoot $file), $true)
     }
     foreach ($file in @('README.md', 'LICENSE', 'SECURITY.md')) {

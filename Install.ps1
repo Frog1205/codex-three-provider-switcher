@@ -45,7 +45,7 @@ public static class EnvironmentBroadcast {
 }
 
 $sourceDir = Join-Path $PSScriptRoot 'src'
-foreach ($required in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
+foreach ($required in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
     if (-not (Test-Path -LiteralPath (Join-Path $sourceDir $required))) {
         throw "Package file is missing: $required"
     }

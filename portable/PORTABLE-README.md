@@ -10,10 +10,12 @@
 
 密钥输入过程不会显示字符。密钥只保存到当前 Windows 用户环境变量，不会写入本目录或 Codex `config.toml`。
 
-如果额度显示为“暂不可用”，请先安装 Node.js 和 npm 版 Codex CLI：
+如果官方 Codex 额度显示为“暂不可用”，请先安装 Node.js 和 npm 版 Codex CLI：
 
 ```powershell
 npm install -g @openai/codex
 ```
+
+DeepSeek 余额显示只需要已配置的 `DEEPSEEK_API_KEY`，不需要 Codex CLI。若显示“暂不可用”，请检查 Key 是否有效以及是否能访问 `https://api.deepseek.com/user/balance`。
 
 本工具是非官方社区项目，安装包未购买代码签名证书。遇到 Windows SmartScreen 时，请先核对下载来源是本项目 GitHub Releases 页面，再点击“更多信息”与“仍要运行”。

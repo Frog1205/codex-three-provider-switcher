@@ -31,7 +31,7 @@ try {
     [IO.Directory]::CreateDirectory($portableRoot) | Out-Null
     [IO.Directory]::CreateDirectory((Join-Path $portableRoot 'src')) | Out-Null
 
-    foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
+    foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
         [IO.File]::Copy((Join-Path $repoRoot "src\$file"), (Join-Path $portableRoot "src\$file"), $true)
     }
     foreach ($file in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'PORTABLE-README.md')) {
