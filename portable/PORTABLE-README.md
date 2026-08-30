@@ -18,4 +18,6 @@ npm install -g @openai/codex
 
 DeepSeek 余额显示只需要已配置的 `DEEPSEEK_API_KEY`，不需要 Codex CLI。若显示“暂不可用”，请检查 Key 是否有效以及是否能访问 `https://api.deepseek.com/user/balance`。
 
+Honknet 额度显示使用 `HONKNET_API_KEY`（也兼容 `HONKAI_API_KEY`）调用 `https://ai.honknet.io/api/v1/usage`，默认动态查询当前自然月到今天，不需要 Codex CLI。若显示“暂不可用”，请检查 Key 是否有效以及是否能访问该 usage 接口。
+
 本工具是非官方社区项目，安装包未购买代码签名证书。遇到 Windows SmartScreen 时，请先核对下载来源是本项目 GitHub Releases 页面，再点击“更多信息”与“仍要运行”。

@@ -9,12 +9,20 @@ $installerDefinition = Join-Path $repoRoot 'packaging\CodexThreeProviderSwitcher
 $buildScript = Join-Path $repoRoot 'packaging\Build-Release.ps1'
 $keyScript = Join-Path $repoRoot 'src\ConfigureProviderKeys.ps1'
 $chineseInstallerLanguage = Join-Path $repoRoot 'packaging\languages\ChineseSimplified.isl'
+$installScript = Join-Path $repoRoot 'Install.ps1'
 
 foreach ($script in @($buildScript, $keyScript)) {
     $tokens = $null
     $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($script, [ref]$tokens, [ref]$errors) | Out-Null
     if ($errors.Count -gt 0) { throw "PowerShell syntax errors in $script" }
+}
+
+$buildText = [IO.File]::ReadAllText($buildScript)
+$installText = [IO.File]::ReadAllText($installScript)
+foreach ($required in @('Get-HonkaiUsage.ps1')) {
+    if (-not $buildText.Contains($required)) { throw "Build script does not include $required" }
+    if (-not $installText.Contains($required)) { throw "Install script does not include $required" }
 }
 
 $keyBytes = [IO.File]::ReadAllBytes($keyScript)
@@ -42,7 +50,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
     $header = [IO.File]::ReadAllBytes($setup)
     if ($header[0] -ne 0x4D -or $header[1] -ne 0x5A) { throw 'Installer is not a Windows executable.' }
     $zipEntries = @(tar -tf $zip)
-    foreach ($expected in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'src/CodexProviderSwitcher.ps1', 'src/Get-DeepSeekBalance.ps1', 'src/ConfigureProviderKeys.ps1')) {
+    foreach ($expected in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'src/CodexProviderSwitcher.ps1', 'src/Get-DeepSeekBalance.ps1', 'src/Get-HonkaiUsage.ps1', 'src/ConfigureProviderKeys.ps1')) {
         if (-not ($zipEntries -match [regex]::Escape($expected))) { throw "Portable archive entry is missing: $expected" }
     }
 
@@ -64,7 +72,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
             ) -PassThru -Wait
             if ($installer.ExitCode -ne 0) { throw "Installer exit code: $($installer.ExitCode)" }
 
-            foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json', 'unins000.exe')) {
+            foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'Get-HonkaiUsage.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json', 'unins000.exe')) {
                 if (-not (Test-Path -LiteralPath (Join-Path $installDir $file))) { throw "Installed file is missing: $file" }
             }
 

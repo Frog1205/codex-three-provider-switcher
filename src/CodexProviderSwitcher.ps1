@@ -5,6 +5,7 @@
     [string]$ProvidersPath = (Join-Path $PSScriptRoot 'providers.json'),
     [string]$RateLimitsPath = (Join-Path $PSScriptRoot 'Get-CodexRateLimits.ps1'),
     [string]$DeepSeekBalancePath = (Join-Path $PSScriptRoot 'Get-DeepSeekBalance.ps1'),
+    [string]$HonkaiUsagePath = (Join-Path $PSScriptRoot 'Get-HonkaiUsage.ps1'),
     [ValidateRange(15, 3600)]
     [int]$QuotaRefreshSeconds = 60,
     [ValidateSet('zh-CN', 'en')]
@@ -345,6 +346,19 @@ function Show-Switcher {
             DeepSeekErrorTimedOut = 'DeepSeek 余额查询超时。'
             DeepSeekErrorCheckFailed = 'DeepSeek 余额查询失败，请检查 DeepSeek Key 和网络。'
             DeepSeekErrorStatus = "{0}`r`n线路切换功能仍可正常使用。"
+            HonkaiQuotaTitle = 'Honknet 额度'
+            HonkaiBalance = 'Honknet 剩余额度：{0:N2} {1}'
+            HonkaiChecking = 'Honknet 额度：检测中...'
+            HonkaiUnavailable = 'Honknet 额度：暂不可用'
+            HonkaiBreakdown = '今日：{0:N0} 请求，{1:N0} tokens，{2:N2} {3}`r`n本月用量：{4:N2} {5}'
+            HonkaiStatusAvailable = "Honknet 额度可用。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            HonkaiStatusLow = "Honknet 额度不足，请及时关注。`r`n更新时间 {0}；每 {1} 秒自动刷新。"
+            HonkaiMissingKey = 'Honknet/HonkAI 密钥未配置，无法查询额度。'
+            HonkaiErrorReaderMissing = '未找到 Honknet 额度读取器，请重新安装本工具。'
+            HonkaiErrorParseFailed = '无法解析 Honknet 额度数据。'
+            HonkaiErrorTimedOut = 'Honknet 额度查询超时。'
+            HonkaiErrorCheckFailed = 'Honknet 额度查询失败，请检查密钥和网络。'
+            HonkaiErrorStatus = "{0}`r`n线路切换功能仍可正常使用。"
             Privacy = '密钥仅从 Windows 环境变量读取；切换前会自动备份配置。'
         }
         'en' = @{
@@ -405,13 +419,26 @@ function Show-Switcher {
             DeepSeekErrorTimedOut = 'DeepSeek balance check timed out.'
             DeepSeekErrorCheckFailed = 'DeepSeek balance check failed. Check the key and network.'
             DeepSeekErrorStatus = "{0}`r`nThe provider switcher remains available."
+            HonkaiQuotaTitle = 'Honknet Usage'
+            HonkaiBalance = 'Honknet remaining: {0:N2} {1}'
+            HonkaiChecking = 'Honknet usage: Checking...'
+            HonkaiUnavailable = 'Honknet usage: Unavailable'
+            HonkaiBreakdown = 'Today: {0:N0} requests, {1:N0} tokens, {2:N2} {3}`r`nMonthly used: {4:N2} {5}'
+            HonkaiStatusAvailable = "Honknet usage is available.`r`nUpdated {0}; auto refresh every {1} seconds."
+            HonkaiStatusLow = "Honknet usage is low. Top up soon.`r`nUpdated {0}; auto refresh every {1} seconds."
+            HonkaiMissingKey = 'Honknet/HonkAI API key is not configured. Usage query is unavailable.'
+            HonkaiErrorReaderMissing = 'Honknet usage reader was not found. Reinstall this tool.'
+            HonkaiErrorParseFailed = 'The Honknet usage response could not be parsed.'
+            HonkaiErrorTimedOut = 'Honknet usage check timed out.'
+            HonkaiErrorCheckFailed = 'Honknet usage check failed. Check the key and network.'
+            HonkaiErrorStatus = "{0}`r`nThe provider switcher remains available."
             Privacy = 'Keys come only from Windows environment variables. Config is backed up.'
         }
     }
     $text = { param([string]$Key) [string]$strings[$uiState.Language][$Key] }
 
     $form = New-Object Windows.Forms.Form
-    $form.ClientSize = New-Object Drawing.Size(680, 650)
+    $form.ClientSize = New-Object Drawing.Size(680, 880)
     $form.StartPosition = 'CenterScreen'
     $form.FormBorderStyle = 'FixedDialog'
     $form.MaximizeBox = $false
@@ -505,28 +532,54 @@ function Show-Switcher {
     $quotaStatus.ForeColor = [Drawing.Color]::DimGray
     $form.Controls.Add($quotaStatus)
 
+    $honkaiQuotaTitle = New-Object Windows.Forms.Label
+    $honkaiQuotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
+    $honkaiQuotaTitle.AutoSize = $true
+    $honkaiQuotaTitle.Location = New-Object Drawing.Point(33, 464)
+    $form.Controls.Add($honkaiQuotaTitle)
+
+    $honkaiBalance = New-Object Windows.Forms.Label
+    $honkaiBalance.AutoSize = $true
+    $honkaiBalance.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
+    $honkaiBalance.Location = New-Object Drawing.Point(33, 500)
+    $form.Controls.Add($honkaiBalance)
+
+    $honkaiBreakdown = New-Object Windows.Forms.Label
+    $honkaiBreakdown.AutoSize = $false
+    $honkaiBreakdown.Size = New-Object Drawing.Size(614, 38)
+    $honkaiBreakdown.Location = New-Object Drawing.Point(33, 532)
+    $honkaiBreakdown.ForeColor = [Drawing.Color]::DimGray
+    $form.Controls.Add($honkaiBreakdown)
+
+    $honkaiStatus = New-Object Windows.Forms.Label
+    $honkaiStatus.AutoSize = $false
+    $honkaiStatus.Size = New-Object Drawing.Size(614, 34)
+    $honkaiStatus.Location = New-Object Drawing.Point(33, 570)
+    $honkaiStatus.ForeColor = [Drawing.Color]::DimGray
+    $form.Controls.Add($honkaiStatus)
+
     $deepseekQuotaTitle = New-Object Windows.Forms.Label
     $deepseekQuotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
     $deepseekQuotaTitle.AutoSize = $true
-    $deepseekQuotaTitle.Location = New-Object Drawing.Point(33, 464)
+    $deepseekQuotaTitle.Location = New-Object Drawing.Point(33, 620)
     $form.Controls.Add($deepseekQuotaTitle)
 
     $deepseekBalance = New-Object Windows.Forms.Label
     $deepseekBalance.AutoSize = $true
     $deepseekBalance.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
-    $deepseekBalance.Location = New-Object Drawing.Point(33, 500)
+    $deepseekBalance.Location = New-Object Drawing.Point(33, 656)
     $form.Controls.Add($deepseekBalance)
 
     $deepseekBreakdown = New-Object Windows.Forms.Label
     $deepseekBreakdown.AutoSize = $true
-    $deepseekBreakdown.Location = New-Object Drawing.Point(33, 531)
+    $deepseekBreakdown.Location = New-Object Drawing.Point(33, 687)
     $deepseekBreakdown.ForeColor = [Drawing.Color]::DimGray
     $form.Controls.Add($deepseekBreakdown)
 
     $deepseekStatus = New-Object Windows.Forms.Label
     $deepseekStatus.AutoSize = $false
     $deepseekStatus.Size = New-Object Drawing.Size(614, 34)
-    $deepseekStatus.Location = New-Object Drawing.Point(33, 559)
+    $deepseekStatus.Location = New-Object Drawing.Point(33, 719)
     $deepseekStatus.ForeColor = [Drawing.Color]::DimGray
     $form.Controls.Add($deepseekStatus)
 
@@ -534,7 +587,7 @@ function Show-Switcher {
     $privacy.ForeColor = [Drawing.Color]::DimGray
     $privacy.AutoSize = $false
     $privacy.Size = New-Object Drawing.Size(610, 30)
-    $privacy.Location = New-Object Drawing.Point(33, 606)
+    $privacy.Location = New-Object Drawing.Point(33, 806)
     $form.Controls.Add($privacy)
 
     $quotaState = @{
@@ -550,6 +603,17 @@ function Show-Switcher {
     }
 
     $deepseekState = @{
+        Process = $null
+        OutputTask = $null
+        ErrorTask = $null
+        StartedAt = $null
+        TimedOut = $false
+        LastData = $null
+        ErrorKey = $null
+        IsChecking = $false
+    }
+
+    $honkaiState = @{
         Process = $null
         OutputTask = $null
         ErrorTask = $null
@@ -579,7 +643,7 @@ function Show-Switcher {
     $refresh = {
         $state = Get-CurrentState
         $status.Text = ((& $text 'CurrentStatus') -f (& $getProviderDisplay $state), $state.Model)
-        $honkReady = Get-KeyPresent ([string]$definitions.honknet.env_key)
+        $honkReady = (Get-KeyPresent 'HONKNET_API_KEY') -or (Get-KeyPresent 'HONKAI_API_KEY')
         $dsReady = Get-KeyPresent ([string]$definitions.deepseek.env_key)
         $catalogReady = Test-Catalog $definitions.deepseek
         $health.Text = ((& $text 'Health') -f `
@@ -912,13 +976,176 @@ function Show-Switcher {
         }
     })
 
+    $renderHonkai = {
+        $refreshQuotaButton.Text = if ($quotaState.IsChecking -or $deepseekState.IsChecking -or $honkaiState.IsChecking) {
+            & $text 'Checking'
+        }
+        else {
+            & $text 'Refresh'
+        }
+        if ($null -ne $honkaiState.LastData) {
+            $data = $honkaiState.LastData
+            $currency = [string]$data.Currency
+            $honkaiBalance.Text = ((& $text 'HonkaiBalance') -f $data.Remaining, $currency)
+            $honkaiBreakdown.Text = ((& $text 'HonkaiBreakdown') -f `
+                $data.TodayRequests, $data.TodayTotalTokens, $data.TodayCost, $currency, `
+                $data.MonthlyUsed, $currency)
+
+            $lowThreshold = if ($currency -eq 'USD') { 1d } else { 0d }
+            if ($data.Remaining -le 0 -or $data.Remaining -le $lowThreshold) {
+                $honkaiBalance.ForeColor = [Drawing.Color]::FromArgb(217, 119, 6)
+                $honkaiStatus.Text = ((& $text 'HonkaiStatusLow') -f `
+                    $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
+                $honkaiStatus.ForeColor = [Drawing.Color]::FromArgb(217, 119, 6)
+            }
+            else {
+                $honkaiBalance.ForeColor = [Drawing.Color]::FromArgb(22, 163, 74)
+                $honkaiStatus.Text = ((& $text 'HonkaiStatusAvailable') -f `
+                    $data.Checked.ToString('HH:mm:ss'), $QuotaRefreshSeconds)
+                $honkaiStatus.ForeColor = [Drawing.Color]::FromArgb(22, 163, 74)
+            }
+            return
+        }
+
+        if ($null -ne $honkaiState.ErrorKey) {
+            $honkaiBalance.Text = & $text 'HonkaiUnavailable'
+            $honkaiBalance.ForeColor = [Drawing.Color]::Firebrick
+            $honkaiBreakdown.Text = ''
+            $honkaiStatus.Text = ((& $text 'HonkaiErrorStatus') -f (& $text $honkaiState.ErrorKey))
+            $honkaiStatus.ForeColor = [Drawing.Color]::Firebrick
+            return
+        }
+
+        $honkaiBalance.Text = & $text 'HonkaiChecking'
+        $honkaiBalance.ForeColor = [Drawing.Color]::DimGray
+        $honkaiBreakdown.Text = ''
+        $honkaiStatus.Text = ((& $text 'AutoRefresh') -f $QuotaRefreshSeconds)
+        $honkaiStatus.ForeColor = [Drawing.Color]::DimGray
+    }
+
+    $showHonkaiError = {
+        param([string]$ErrorKey)
+        $honkaiState.LastData = $null
+        $honkaiState.ErrorKey = $ErrorKey
+        $honkaiState.IsChecking = $false
+        & $renderHonkai
+    }
+
+    $applyHonkaiJson = {
+        param([string]$JsonText)
+        try {
+            $data = $JsonText | ConvertFrom-Json
+            $remaining = [decimal]$data.remaining
+            $monthlyUsed = [decimal]$data.monthly_used
+            $todayRequests = [long]$data.today_requests
+            $todayTotalTokens = [long]$data.today_total_tokens
+            $todayCost = [decimal]$data.today_cost_usd
+            if ($remaining -lt 0) { $remaining = 0d }
+            if ($monthlyUsed -lt 0) { $monthlyUsed = 0d }
+            $checked = [DateTimeOffset]::Parse([string]$data.checked_at).ToLocalTime()
+            $honkaiState.LastData = [pscustomobject]@{
+                Remaining = $remaining
+                MonthlyUsed = $monthlyUsed
+                TodayRequests = $todayRequests
+                TodayTotalTokens = $todayTotalTokens
+                TodayCost = $todayCost
+                Currency = if ([string]::IsNullOrWhiteSpace([string]$data.currency)) { 'USD' } else { [string]$data.currency }
+                Checked = $checked
+            }
+            $honkaiState.ErrorKey = $null
+            $honkaiState.IsChecking = $false
+            & $renderHonkai
+        }
+        catch {
+            & $showHonkaiError 'HonkaiErrorParseFailed'
+        }
+    }
+
+    $startHonkaiRefresh = {
+        if ($null -ne $honkaiState.Process -and -not $honkaiState.Process.HasExited) { return }
+        if (-not (Test-Path -LiteralPath $HonkaiUsagePath)) {
+            & $showHonkaiError 'HonkaiErrorReaderMissing'
+            return
+        }
+        if (-not ((Get-KeyPresent 'HONKNET_API_KEY') -or (Get-KeyPresent 'HONKAI_API_KEY'))) {
+            & $showHonkaiError 'HonkaiMissingKey'
+            return
+        }
+
+        $startInfo = New-Object Diagnostics.ProcessStartInfo
+        $startInfo.FileName = (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
+        $startInfo.Arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -File `"$HonkaiUsagePath`" -Json -TimeoutSeconds 8"
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $startInfo.CreateNoWindow = $true
+
+        $process = New-Object Diagnostics.Process
+        $process.StartInfo = $startInfo
+        [void]$process.Start()
+        $honkaiState.Process = $process
+        $honkaiState.OutputTask = $process.StandardOutput.ReadLineAsync()
+        $honkaiState.ErrorTask = $process.StandardError.ReadLineAsync()
+        $honkaiState.StartedAt = [DateTimeOffset]::Now
+        $honkaiState.TimedOut = $false
+        $honkaiState.IsChecking = $true
+        $refreshQuotaButton.Enabled = $false
+        & $renderHonkai
+    }
+
+    $honkaiPollTimer = New-Object Windows.Forms.Timer
+    $honkaiPollTimer.Interval = 500
+    $honkaiPollTimer.Add_Tick({
+        $process = $honkaiState.Process
+        if ($null -eq $process) { return }
+        if ($honkaiState.OutputTask.IsCompleted -and -not [string]::IsNullOrWhiteSpace($honkaiState.OutputTask.Result)) {
+            $stdout = $honkaiState.OutputTask.Result
+            if (-not $process.HasExited) {
+                [void]$process.WaitForExit(1000)
+                if (-not $process.HasExited) { try { $process.Kill() } catch { } }
+            }
+            $process.Dispose()
+            $honkaiState.Process = $null
+            $refreshQuotaButton.Enabled = $true
+            & $applyHonkaiJson $stdout
+            return
+        }
+        if (-not $process.HasExited) {
+            if (([DateTimeOffset]::Now - $honkaiState.StartedAt).TotalSeconds -gt 30) {
+                $honkaiState.TimedOut = $true
+                try { $process.Kill() } catch { }
+            }
+            return
+        }
+
+        $stdout = if ($honkaiState.OutputTask.IsCompleted) { $honkaiState.OutputTask.Result } else { '' }
+        $exitCode = $process.ExitCode
+        $process.Dispose()
+        $honkaiState.Process = $null
+        $refreshQuotaButton.Enabled = $true
+        $honkaiState.IsChecking = $false
+
+        if ($honkaiState.TimedOut) {
+            & $showHonkaiError 'HonkaiErrorTimedOut'
+        }
+        elseif ($exitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
+            & $showHonkaiError 'HonkaiErrorCheckFailed'
+        }
+        else {
+            & $applyHonkaiJson $stdout
+        }
+    })
+
     $quotaAutoTimer = New-Object Windows.Forms.Timer
     $quotaAutoTimer.Interval = $QuotaRefreshSeconds * 1000
     $quotaAutoTimer.Add_Tick({ & $startQuotaRefresh })
     $deepseekAutoTimer = New-Object Windows.Forms.Timer
     $deepseekAutoTimer.Interval = $QuotaRefreshSeconds * 1000
     $deepseekAutoTimer.Add_Tick({ & $startDeepSeekRefresh })
-    $refreshQuotaButton.Add_Click({ & $startQuotaRefresh; & $startDeepSeekRefresh })
+    $honkaiAutoTimer = New-Object Windows.Forms.Timer
+    $honkaiAutoTimer.Interval = $QuotaRefreshSeconds * 1000
+    $honkaiAutoTimer.Add_Tick({ & $startHonkaiRefresh })
+    $refreshQuotaButton.Add_Click({ & $startQuotaRefresh; & $startHonkaiRefresh; & $startDeepSeekRefresh })
 
     foreach ($providerButton in $providerButtons.Values) {
         $providerButton.Add_Click({
@@ -940,6 +1167,7 @@ function Show-Switcher {
                     & $refresh
                     & $renderQuota
                     & $renderDeepSeek
+                    & $renderHonkai
                     [Windows.Forms.MessageBox]::Show(
                         (& $text 'SwitchDone'),
                         (& $text 'SwitchDoneTitle'),
@@ -978,11 +1206,13 @@ function Show-Switcher {
         $providerButtons['honknet'].Text = & $text 'HonknetButton'
         $providerButtons['deepseek'].Text = & $text 'DeepSeekButton'
         $quotaTitle.Text = & $text 'QuotaTitle'
+        $honkaiQuotaTitle.Text = & $text 'HonkaiQuotaTitle'
         $deepseekQuotaTitle.Text = & $text 'DeepSeekQuotaTitle'
         $privacy.Text = & $text 'Privacy'
         & $refresh
         & $renderQuota
         & $renderDeepSeek
+        & $renderHonkai
     }
 
     $languageButton.Add_Click({
@@ -995,20 +1225,28 @@ function Show-Switcher {
         $quotaPollTimer.Stop()
         $deepseekAutoTimer.Stop()
         $deepseekPollTimer.Stop()
+        $honkaiAutoTimer.Stop()
+        $honkaiPollTimer.Stop()
         if ($null -ne $quotaState.Process -and -not $quotaState.Process.HasExited) {
             try { $quotaState.Process.Kill() } catch { }
         }
         if ($null -ne $deepseekState.Process -and -not $deepseekState.Process.HasExited) {
             try { $deepseekState.Process.Kill() } catch { }
         }
+        if ($null -ne $honkaiState.Process -and -not $honkaiState.Process.HasExited) {
+            try { $honkaiState.Process.Kill() } catch { }
+        }
     })
 
     & $updateLanguage
     $quotaPollTimer.Start()
     $deepseekPollTimer.Start()
+    $honkaiPollTimer.Start()
     $quotaAutoTimer.Start()
     $deepseekAutoTimer.Start()
+    $honkaiAutoTimer.Start()
     & $startQuotaRefresh
+    & $startHonkaiRefresh
     & $startDeepSeekRefresh
     [void]$form.ShowDialog()
 }

@@ -50,6 +50,7 @@ Name: "desktopicon"; Description: "创建桌面快捷方式 / Create a desktop s
 Source: "src\CodexProviderSwitcher.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "src\Get-CodexRateLimits.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "src\Get-DeepSeekBalance.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "src\Get-HonkaiUsage.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "src\ConfigureProviderKeys.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "src\providers.json"; DestDir: "{app}"; Flags: ignoreversion
 Source: "src\deepseek-model-catalog.json"; DestDir: "{app}"; Flags: ignoreversion
