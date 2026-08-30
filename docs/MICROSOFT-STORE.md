@@ -1,4 +1,6 @@
-# Microsoft Store / MSIX 发布指南
+# Microsoft Store / MSIX 发布指南（维护者/Agent 专用）
+
+> 本文不是普通用户安装说明。当前 README 只提供 GitHub Releases 下载；本页仅保留给维护者或 Agent 参考 MSIX 构建流程，不能把本地生成的 Store 包当作已上架的 Microsoft Store 版本。
 
 本指南用于把 Codex Three-Provider Switcher 发布到 Microsoft Store。目标平台为 Windows 10/11 x64，Store 分发包为 MSIX。
 

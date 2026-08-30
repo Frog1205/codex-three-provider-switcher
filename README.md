@@ -10,24 +10,22 @@
 
 > 这是非官方社区工具。它不会提供、共享或代购任何 API Key，也不会绕过供应商的账号、额度或使用限制。
 
-## 下载与安装（推荐小白使用）
+## 阅读导航：先看你的身份
+
+| 读者 | 推荐阅读 | 目标 |
+| --- | --- | --- |
+| 👤 普通用户 | [下载与安装](#-普通用户下载与安装)、[日常使用](#-普通用户日常使用)、[常见问题](#-普通用户常见问题) | 安装、配置 Key、查询额度和切换线路 |
+| 🤖 Agent / 开发者 | [Agent 快速索引](docs/AGENT-QUICKSTART.md)、[项目结构](#-agent开发者项目结构)、[验证安装](#-agent开发者验证安装)、[开发与贡献](#-agent开发者开发与贡献) | 快速定位代码、测试、配置契约和打包入口 |
+
+普通用户不需要阅读 PowerShell、打包脚本或 Agent 快速索引；Agent 处理任务时应优先读取快速索引，再按需打开源码文件。
+
+## 👤 普通用户：下载与安装
 
 支持两类平台：Windows 10/11 x64，以及 macOS Apple Silicon（M 系列 arm64）。Intel Mac 不支持。
 
-### Microsoft Store 版（正式发行方案，准备中）
+### GitHub Releases 下载
 
-项目将优先通过 Microsoft Store 发布 MSIX。通过认证后，MSIX 会由 Microsoft 使用微软证书重新签名，用户从 Store 安装时不需要处理 GitHub 下载文件常见的 SmartScreen 警告。当前尚未通过 Store 认证，**不要从第三方网站下载所谓“商店签名版”**。
-
-- Store 上架后，这里会补充唯一的 Microsoft Store 官方链接。
-- Store 版与 GitHub 版使用同一套开源代码和 provider 配置。
-- 开发者无需购买商业代码签名证书；免费签名只适用于通过 Store 审核并由 Store 分发的 MSIX。
-- 在 GitHub 单独分发 MSIX 仍然需要开发者自己的可信签名，不能把未签名的 Store 上传包当作安装包发布。
-
-开发者请阅读 [Microsoft Store / MSIX 发布指南](docs/MICROSOFT-STORE.md)。
-
-### GitHub 备用下载
-
-在 Store 上架前，或无法访问 Store 时，请只从本项目 GitHub Releases 下载：
+请只从本项目 GitHub Releases 下载：
 
 - [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-Setup-x64-V_1.3_260829.02.exe)：自动安装并创建桌面和开始菜单快捷方式。
 - [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-Portable-x64-V_1.3_260829.02.zip)：解压后双击启动，不写入安装目录或卸载信息。
@@ -60,11 +58,11 @@ macOS GUI 同样显示 Official Codex、Honknet、DeepSeek 三路额度卡片；
 
 ### Windows 安全提示
 
-本提示只适用于 GitHub 提供的未签名 EXE/ZIP 备用版本。本项目没有为这些文件购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请先确认文件来自本仓库的 GitHub Releases，再点击“更多信息”与“仍要运行”。如果下载来源不明，请不要运行。通过 Microsoft Store 安装的正式 MSIX 由 Microsoft 签名，不使用这套手动放行流程。
+本提示适用于 GitHub 提供的未签名 EXE/ZIP 版本。本项目没有为这些文件购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请先确认文件来自本仓库的 GitHub Releases，再点击“更多信息”与“仍要运行”。如果下载来源不明，请不要运行。
 
 macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` 文件时，如果系统阻止打开，请在“系统设置 → 隐私与安全性”中允许，并确认使用的是 Apple Silicon Mac。
 
-## 最终效果（v1.3）
+## 👤 普通用户：界面预览（v1.3）
 
 ![Codex 三线路切换器 V_1.3_260829.02 界面](docs/ui-preview-v1.3.png)
 
@@ -72,7 +70,7 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 不同版本的 GUI 外观和变化请查看 [GUI 版本对照](docs/GUI-VERSIONS.md)。
 
-## 为什么需要这个工具
+## 👤 普通用户：为什么需要这个工具
 
 这个项目解决的核心问题不是“管理 Codex 登录账号”，而是明确控制 Codex Desktop 下一次启动时使用的 provider 和模型线路。
 
@@ -96,7 +94,7 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 > 不建议让 CC Switch、其他 provider 管理工具和本项目同时改写同一个 `config.toml`。确定使用本项目后，应由一个工具统一管理线路，避免配置再次相互覆盖。
 
-## 它会做什么
+## 👤 普通用户：它会做什么
 
 - 提供一个包含三个按钮的 Windows 桌面窗口。
 - 默认使用中文界面，并支持在窗口内即时切换中文和英文。
@@ -109,12 +107,12 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 - macOS GUI 使用独立的 Python/Tkinter 额度读取器，显示官方剩余比例、Honknet 用量和 DeepSeek 余额；不会复用 Windows PowerShell/WinForms 读取器。
 - 切换后重启 Codex Desktop；已有任务不会改变 provider，需要新建任务。
 
-## 系统要求
+## 👤 普通用户：系统要求
 
 ### Windows
 
 - Windows 10 或 Windows 11，64 位 x64 电脑。
-- Microsoft Store 版 Codex Desktop。
+- Codex Desktop（已正常安装并登录）。
 - Windows PowerShell 5.1 或 PowerShell 7。
 
 ### macOS Apple Silicon
@@ -152,7 +150,7 @@ codex --version
 npm install -g @openai/codex
 ```
 
-## 重要安全提醒
+## 👤 普通用户：重要安全提醒
 
 不要把真实 API Key 填进以下文件：
 
@@ -163,7 +161,7 @@ npm install -g @openai/codex
 
 Windows 安装程序通过隐藏输入读取 Key，并保存到当前 Windows 用户的环境变量；macOS GUI 从 shell 环境变量读取 Key。仓库的 `.gitignore` 也会排除常见密钥和 Codex 本地配置文件，但 `.gitignore` 不是泄密后的补救措施。
 
-## 源码安装（高级用户）
+## 🤖 Agent/开发者：源码与维护
 
 普通用户优先使用上面的 EXE 安装版或 ZIP 免安装版。以下步骤用于需要审查源码、修改 provider 或参与开发的用户。
 
@@ -236,7 +234,7 @@ Codex Three-Provider Switcher
 
 不要用切换前已经打开的任务判断是否成功。旧任务可能继续保留原会话的 provider 状态。
 
-## 不使用安装程序时，手工配置 Key
+## 👤 普通用户：手工配置 Key（可选）
 
 ### PowerShell 方法
 
@@ -285,7 +283,7 @@ Codex Three-Provider Switcher
 
 `env_key` 不是环境变量本身。它是 Codex `config.toml` 中的字段，用来告诉 Codex应该读取哪个 Windows 环境变量。
 
-## 日常使用
+## 👤 普通用户：日常使用
 
 桌面窗口显示：
 
@@ -349,7 +347,7 @@ DeepSeek 官方公开接口只提供余额，不提供网页 [usage](https://pla
 
 自动刷新只在切换器窗口保持打开时运行。关闭窗口后不会安装后台服务或计划任务。
 
-## 命令行使用（Windows）
+## 🤖 Agent/开发者：命令行与诊断
 
 进入安装目录：
 
@@ -401,7 +399,7 @@ python3 macos/TokenModelSwitch.py --self-test
 | `honkai`、`honknet` | Honknet |
 | `ds`、`deepseek` | DeepSeek |
 
-## 生成的 Codex 配置
+## 🤖 Agent/开发者：生成的 Codex 配置
 
 Honknet 切换时会自动维护以下 provider。真实 Key 不会出现在 TOML 中：
 
@@ -434,7 +432,7 @@ model_reasoning_effort = "medium"
 disable_response_storage = true
 ```
 
-## 修改 URL 或模型
+## 🤖 Agent/开发者：修改 URL 或模型
 
 不同账号、代理或服务商可能使用不同 URL 和模型名。修改仓库中的：
 
@@ -457,7 +455,7 @@ src\providers.json
 
 DeepSeek 默认附带 `deepseek-model-catalog.json`。如果更换模型 slug，模型目录中的 `slug` 也必须匹配。高级用户也可以从 DeepSeek 定义中删除 `catalog_file`，让 Codex 使用默认模型能力，但部分工具能力可能无法正确声明。
 
-## 验证安装
+## 🤖 Agent/开发者：验证安装
 
 先运行不接触正式配置的自动测试：
 
@@ -479,7 +477,7 @@ PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/mode
 - 切换前后 MCP、插件和权限配置仍存在。
 - `provider-switch-backups` 每次新增一份备份。
 
-## 常见问题
+## 👤 普通用户：常见问题
 
 ### 显示 `HONKNET_API_KEY is missing`
 
@@ -569,7 +567,7 @@ DeepSeek 官方公开接口只返回余额；详细用量报表仍以 [usage](ht
 4. 先备份当前文件，再将正常备份复制为 `%USERPROFILE%\.codex\config.toml`。
 5. 重新打开 Codex Desktop。
 
-## 卸载
+## 👤 普通用户：卸载
 
 使用 EXE 安装版时，在 Windows“设置 > 应用 > 已安装的应用”中卸载 `Codex Three-Provider Switcher`，或使用开始菜单中的卸载入口。卸载程序文件时会保留 Codex 配置、线路备份和环境变量中的 Key。
 
@@ -595,7 +593,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1 -RemoveC
 
 卸载不会自动恢复当前 provider。如需回到官方线路，请先使用切换器点击 `GPT Official`，确认成功后再卸载。
 
-## 项目结构
+## 🤖 Agent/开发者：项目结构
 
 ```text
 .
@@ -604,6 +602,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1 -RemoveC
 |-- README.md
 |-- SECURITY.md
 |-- LICENSE
+|-- docs
+|   |-- AGENT-QUICKSTART.md
+|   |-- GUI-VERSIONS.md
+|   `-- MICROSOFT-STORE.md (维护者/Agent 专用)
 |-- packaging
 |   |-- Build-Release.ps1
 |   |-- CodexThreeProviderSwitcher.iss
@@ -621,12 +623,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1 -RemoveC
 |   |-- Get-HonkaiUsage.ps1
 |   |-- providers.json
 |   `-- deepseek-model-catalog.json
+|-- macos
+|   |-- TokenModelSwitch.py
+|   |-- Start-Token-Model-Switch.command
+|   `-- README.md
 `-- tests
     |-- Test-Switcher.ps1
     `-- Test-Packages.ps1
 ```
 
-## 开发与贡献
+## 🤖 Agent/开发者：开发与贡献
 
 提交 PR 前请运行：
 
