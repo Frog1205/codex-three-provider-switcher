@@ -52,7 +52,17 @@ class UnsupportedPlatformError(RuntimeError):
 def ensure_apple_silicon() -> None:
     if sys.platform != "darwin":
         raise UnsupportedPlatformError("This GUI is for macOS Apple Silicon only.")
-    if platform.machine().lower() not in SUPPORTED_ARCH:
+    machine = platform.machine().lower()
+    hardware_arm = machine in SUPPORTED_ARCH
+    if not hardware_arm:
+        # A Python process launched through Rosetta may report x86_64 even on an M-series Mac.
+        try:
+            hardware_arm = subprocess.check_output(
+                ["sysctl", "-in", "hw.optional.arm64"], text=True, stderr=subprocess.DEVNULL
+            ).strip() == "1"
+        except (OSError, subprocess.SubprocessError):
+            hardware_arm = False
+    if not hardware_arm:
         raise UnsupportedPlatformError("Intel Mac is not supported. Apple Silicon (M-series) is required.")
 
 
