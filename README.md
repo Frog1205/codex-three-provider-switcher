@@ -31,6 +31,7 @@
 
 - [下载安装版 EXE](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Setup-x64.exe)：推荐大多数用户使用，自动安装并创建桌面和开始菜单快捷方式。
 - [下载免安装便携版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Portable-x64.zip)：解压后双击启动，不写入安装目录或卸载信息。
+- [下载 macOS Apple Silicon 版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：仅支持 M1/M2/M3/M4 等 Apple Silicon，Intel Mac 不支持。
 - [查看最新版本与更新说明](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest)
 
 ### EXE 安装版
@@ -47,6 +48,13 @@
 2. 右键选择“全部解压”，不能直接在压缩包内运行。
 3. 双击 `Start-Codex-Switcher.cmd` 打开切换器。
 4. 使用第三方线路前，双击 `Configure-Provider-Keys.cmd` 配置 Key。
+
+### macOS Apple Silicon 版
+
+1. 仅在 M 系列 Mac 上下载并完整解压 `Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip`。
+2. 双击 `macos/Start-Token-Model-Switch.command`；首次打开时按系统提示允许执行。
+3. Intel Mac 不支持此 GUI，启动时会明确提示并退出。
+4. 详细的 Python/Tkinter、环境变量和备份说明见 [`macos/README.md`](macos/README.md)。
 
 ### Windows 安全提示
 

@@ -20,6 +20,10 @@
 
 上一版以纵向信息流为主，功能完整，但线路按钮占据较大的纯色区域，当前线路、模型和额度信息层级不够明显。该版本仍保留在 [GitHub Release v1.2.0](https://github.com/Frog1205/codex-three-provider-switcher/releases/tag/v1.2.0) 中，旧安装包和便携包不会被新版本替换。
 
+## macOS Apple Silicon 版
+
+macOS 版从 v1.3 开始同步提供独立 GUI，界面采用同一套路由卡片、Provider 配色和绿色当前模型状态。它只支持 Apple Silicon（M 系列）芯片，Intel Mac 会在启动时拒绝运行；macOS 版不复用 Windows 的 PowerShell/WinForms 额度读取器，但共享同一份 Provider 模型定义和配置备份规则。
+
 ## 版本号规则
 
 GUI 版本号使用以下格式：
