@@ -56,7 +56,7 @@
 3. Intel Mac 不支持此 GUI，启动时会明确提示并退出。
 4. 详细的 Python/Tkinter、环境变量和备份说明见 [`macos/README.md`](macos/README.md)。
 
-macOS GUI 只负责 Token-Model 路由、密钥状态和配置备份；官方 Codex、Honknet、DeepSeek 的额度读取卡片属于 Windows GUI 能力，不会在 Mac 上显示为可用额度。
+macOS GUI 同样显示 Official Codex、Honknet、DeepSeek 三路额度卡片；官方额度需要本机安装 npm 版 `@openai/codex` CLI，第三方额度需要对应 shell 环境变量。查询失败只影响额度显示，不影响线路切换。
 
 ### Windows 安全提示
 
@@ -106,7 +106,7 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 - 从 Windows 环境变量读取第三方 Key，不把 Key 写入仓库或 TOML。
 - macOS GUI 从 shell 环境变量读取第三方 Key，不把 Key 写入仓库或 TOML。
 - Windows GUI 显示官方 Codex、Honknet 和 DeepSeek 的额度/余额，并在窗口打开期间自动刷新。
-- macOS GUI 专注于 Token-Model 路由、密钥状态和配置备份；Windows 专属额度读取器不会在 Mac 上运行。
+- macOS GUI 使用独立的 Python/Tkinter 额度读取器，显示官方剩余比例、Honknet 用量和 DeepSeek 余额；不会复用 Windows PowerShell/WinForms 读取器。
 - 切换后重启 Codex Desktop；已有任务不会改变 provider，需要新建任务。
 
 ## 系统要求
@@ -134,11 +134,11 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 - Honknet 和 DeepSeek 线路需要你自己合法取得的 API Key。
 - 第三方服务端必须支持 Codex 使用的 Responses API。只支持 `chat/completions` 的接口不能直接使用本项目默认配置。
-- 官方额度显示（仅 Windows GUI）需要 Node.js 和 npm 版 `@openai/codex` CLI；未安装时三路切换仍可使用，只有额度区域显示 `Unavailable`。
-- DeepSeek 余额显示（仅 Windows GUI）使用官方公开的 `GET https://api.deepseek.com/user/balance`，只需配置 `DEEPSEEK_API_KEY`，不需要额外安装工具。
-- Honknet 额度显示（仅 Windows GUI）使用公开的 `GET https://ai.honknet.io/api/v1/usage`，只需配置 `HONKNET_API_KEY` 或 `HONKAI_API_KEY`，不需要额外安装工具。
+- 官方额度显示需要 Node.js 和 npm 版 `@openai/codex` CLI；未安装时三路切换仍可使用，只有 Official 卡片显示 `Unavailable`。
+- DeepSeek 余额显示使用官方公开的 `GET https://api.deepseek.com/user/balance`，只需配置 `DEEPSEEK_API_KEY`，不需要额外安装工具。
+- Honknet 额度显示使用公开的 `GET https://ai.honknet.io/api/v1/usage`，只需配置 `HONKNET_API_KEY` 或 `HONKAI_API_KEY`，不需要额外安装工具。
 
-macOS 版不需要安装 Node.js 或 Codex CLI 才能切换线路；Node.js/npm 版 CLI 仅用于 Windows GUI 的官方额度读取。
+macOS 版不需要安装 Node.js 或 Codex CLI 才能切换线路；Node.js/npm 版 CLI 只用于 Official 额度读取，Honknet/DeepSeek 额度直接走公开 HTTPS 接口。
 
 检查 Codex CLI：
 
@@ -500,7 +500,7 @@ PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/mode
 3. 从终端运行 `python3 macos/TokenModelSwitch.py --self-test`，确认配置逻辑正常。
 4. 从 Finder 双击启动时，确认 `HONKNET_API_KEY` 和 `DEEPSEEK_API_KEY` 已写入 `~/.zshrc`；GUI 不会读取未继承到进程的临时 shell 变量。
 
-Mac 版当前不会显示 Windows 专属的额度读取器结果；这不影响 Token-Model 路由切换。
+Mac 版使用独立的额度读取器：未安装 Codex CLI 或未配置第三方 Key 时，对应卡片显示 `Unavailable`；这不影响 Token-Model 路由切换。
 
 ### 显示 `Official Codex remaining: Unavailable`
 

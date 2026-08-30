@@ -22,7 +22,7 @@
 
 ## macOS Apple Silicon 版
 
-macOS 版从 v1.3 开始同步提供独立 GUI，界面采用同一套路由卡片、Provider 配色和绿色当前模型状态。它只支持 Apple Silicon（M 系列）芯片，Intel Mac 会在启动时拒绝运行；macOS 版不复用 Windows 的 PowerShell/WinForms 额度读取器，但共享同一份 Provider 模型定义和配置备份规则。
+macOS 版从 v1.3 开始同步提供独立 GUI，界面采用同一套路由卡片、Provider 配色、绿色当前模型状态和三张额度卡片。它只支持 Apple Silicon（M 系列）芯片，Intel Mac 会在启动时拒绝运行；macOS 版不复用 Windows 的 PowerShell/WinForms 额度读取器，而是用 Python 标准库并发查询官方 Codex、Honknet 和 DeepSeek，同时共享同一份 Provider 模型定义和配置备份规则。
 
 ## 版本号规则
 
