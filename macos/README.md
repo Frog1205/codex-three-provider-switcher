@@ -1,6 +1,6 @@
 # Token · Model Switch for macOS Apple Silicon
 
-这是 Codex Three-Provider Switcher 的 macOS GUI 版本，只支持 Apple Silicon（M1/M2/M3/M4 等 `arm64` 芯片），Intel Mac 不支持。
+这是 Codex Three-Provider Switcher 的 macOS GUI 版本，只支持 Apple Silicon（M1/M2/M3/M4/M5 及后续 `arm64` 芯片），Intel Mac 不支持。
 
 ## 使用条件
 

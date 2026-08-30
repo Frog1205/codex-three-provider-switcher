@@ -31,7 +31,7 @@
 
 - [下载安装版 EXE](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Setup-x64.exe)：推荐大多数用户使用，自动安装并创建桌面和开始菜单快捷方式。
 - [下载免安装便携版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Portable-x64.zip)：解压后双击启动，不写入安装目录或卸载信息。
-- [下载 macOS Apple Silicon 版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：仅支持 M1/M2/M3/M4 等 Apple Silicon，Intel Mac 不支持。
+- [下载 macOS Apple Silicon 版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：支持 M1/M2/M3/M4/M5 及后续 Apple Silicon，Intel Mac 不支持。
 - [查看最新版本与更新说明](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest)
 
 ### EXE 安装版
