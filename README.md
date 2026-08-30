@@ -52,11 +52,13 @@
 
 本提示只适用于 GitHub 提供的未签名 EXE/ZIP 备用版本。本项目没有为这些文件购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请先确认文件来自本仓库的 GitHub Releases，再点击“更多信息”与“仍要运行”。如果下载来源不明，请不要运行。通过 Microsoft Store 安装的正式 MSIX 由 Microsoft 签名，不使用这套手动放行流程。
 
-## 最终效果
+## 最终效果（v1.3）
 
-![Codex 三线路切换器最终界面](docs/assets/codex-provider-switcher.png)
+![Codex 三线路切换器 V_1.3_260829.02 界面](docs/ui-preview-v1.3.png)
 
-面板默认显示中文；点击右上角的 `English` 可即时切换英文，再点击 `中文` 即可切回。界面会显示当前 provider、模型、两个第三方 Key 的配置状态、DeepSeek 模型目录状态、官方 Codex 剩余额度、Honknet 额度以及 DeepSeek 余额。截图中的“已配置”只表示对应配置在本机可用，不包含或展示任何真实 Key。
+当前推荐版本为 `V_1.3_260829.02`：使用 Token · Model 路由管理器布局，当前实际模型以绿色状态高亮，GPT Official、Honknet、DeepSeek 使用青绿、蓝、紫的差异化卡片配色。面板默认显示中文；点击右上角的 `English` 可即时切换英文。截图中的“已配置”只表示对应配置在本机可用，不包含或展示任何真实 Key。
+
+不同版本的 GUI 外观和变化请查看 [GUI 版本对照](docs/GUI-VERSIONS.md)。
 
 ## 为什么需要这个工具
 
