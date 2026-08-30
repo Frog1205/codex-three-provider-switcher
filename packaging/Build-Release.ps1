@@ -1,6 +1,8 @@
 param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version = '1.0.0',
+    [ValidatePattern('^[A-Za-z0-9._-]+$')]
+    [string]$ArtifactSuffix = '',
     [string]$OutputDir = (Join-Path (Split-Path -Parent $PSScriptRoot) 'dist'),
     [string]$IsccPath
 )
@@ -21,9 +23,11 @@ if ([string]::IsNullOrWhiteSpace($IsccPath) -or -not (Test-Path -LiteralPath $Is
     throw 'Inno Setup 6 compiler was not found. Install JRSoftware.InnoSetup with winget.'
 }
 
-$portableName = 'Codex-Three-Provider-Switcher-Portable-x64'
+$artifactTag = if ([string]::IsNullOrWhiteSpace($ArtifactSuffix)) { '' } else { "-$ArtifactSuffix" }
+$portableName = "Codex-Three-Provider-Switcher-Portable-x64$artifactTag"
 $portableZip = Join-Path $outputFullPath "$portableName.zip"
-$setupExe = Join-Path $outputFullPath 'Codex-Three-Provider-Switcher-Setup-x64.exe'
+$setupBaseName = "Codex-Three-Provider-Switcher-Setup-x64$artifactTag"
+$setupExe = Join-Path $outputFullPath "$setupBaseName.exe"
 $stagingRoot = Join-Path $env:TEMP ('codex-switcher-release-' + [guid]::NewGuid().ToString('N'))
 $portableRoot = Join-Path $stagingRoot $portableName
 
@@ -45,7 +49,7 @@ try {
     Compress-Archive -Path $portableRoot -DestinationPath $portableZip -CompressionLevel Optimal
 
     $issPath = Join-Path $PSScriptRoot 'CodexThreeProviderSwitcher.iss'
-    & $IsccPath "/DMyAppVersion=$Version" "/O$outputFullPath" $issPath
+    & $IsccPath "/DMyAppVersion=$Version" "/O$outputFullPath" "/F$setupBaseName" $issPath
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
     if (-not (Test-Path -LiteralPath $setupExe)) { throw "Installer was not created: $setupExe" }
 

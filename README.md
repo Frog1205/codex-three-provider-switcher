@@ -590,6 +590,14 @@ winget install --id JRSoftware.InnoSetup --exact
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.0.0
 ```
 
+如需保留历史产物并生成带版本标识的新安装包，可追加 `-ArtifactSuffix`，例如：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.3.0 -ArtifactSuffix V_1.3_260829.02
+```
+
+这会生成带后缀的 EXE 和 ZIP，不覆盖默认文件名的旧版本产物。
+
 产物位于 `dist`，固定文件名用于 GitHub Releases 的 `latest/download` 链接。安装程序在编译配置中强制要求 Windows 10+ 与 x64 兼容架构。
 
 不要在 Issue、PR、测试 fixture 或日志中提交真实 Key。示例只能使用明确标记为测试用途的占位符。
