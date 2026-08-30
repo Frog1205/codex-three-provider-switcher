@@ -1,6 +1,6 @@
 # Codex Three-Provider Switcher
 
-一个面向 Windows Codex Desktop 的三线路切换器，可在以下 provider 之间切换：
+一个面向 Windows 和 macOS Apple Silicon Codex Desktop 的三线路 Token · Model 切换器，可在以下 provider 之间切换：
 
 | 按钮 | Provider | 默认模型 | 凭据来源 |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@
 
 ## 下载与安装（推荐小白使用）
 
-仅支持 **Windows 10/11 64 位电脑**。
+支持两类平台：Windows 10/11 x64，以及 macOS Apple Silicon（M 系列 arm64）。Intel Mac 不支持。
 
 ### Microsoft Store 版（正式发行方案，准备中）
 
@@ -29,14 +29,14 @@
 
 在 Store 上架前，或无法访问 Store 时，请只从本项目 GitHub Releases 下载：
 
-- [下载安装版 EXE](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Setup-x64.exe)：推荐大多数用户使用，自动安装并创建桌面和开始菜单快捷方式。
-- [下载免安装便携版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-Portable-x64.zip)：解压后双击启动，不写入安装目录或卸载信息。
-- [下载 macOS Apple Silicon 版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest/download/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：支持 M1/M2/M3/M4/M5 及后续 Apple Silicon，Intel Mac 不支持。
+- [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-Setup-x64-V_1.3_260829.02.exe)：自动安装并创建桌面和开始菜单快捷方式。
+- [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-Portable-x64-V_1.3_260829.02.zip)：解压后双击启动，不写入安装目录或卸载信息。
+- [下载 macOS Apple Silicon 版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：支持 M1/M2/M3/M4/M5 及后续 Apple Silicon，Intel Mac 不支持。
 - [查看最新版本与更新说明](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest)
 
 ### EXE 安装版
 
-1. 下载 `Codex-Three-Provider-Switcher-Setup-x64.exe`。
+1. 下载 `Codex-Three-Provider-Switcher-Setup-x64-V_1.3_260829.02.exe`。
 2. 双击安装，不需要管理员权限。
 3. 安装完成后，双击桌面的“Codex 三线路切换器”。
 4. 只使用 GPT 官方线路时无需配置第三方 Key。
@@ -44,7 +44,7 @@
 
 ### ZIP 免安装版
 
-1. 下载 `Codex-Three-Provider-Switcher-Portable-x64.zip`。
+1. 下载 `Codex-Three-Provider-Switcher-Portable-x64-V_1.3_260829.02.zip`。
 2. 右键选择“全部解压”，不能直接在压缩包内运行。
 3. 双击 `Start-Codex-Switcher.cmd` 打开切换器。
 4. 使用第三方线路前，双击 `Configure-Provider-Keys.cmd` 配置 Key。
@@ -56,9 +56,13 @@
 3. Intel Mac 不支持此 GUI，启动时会明确提示并退出。
 4. 详细的 Python/Tkinter、环境变量和备份说明见 [`macos/README.md`](macos/README.md)。
 
+macOS GUI 只负责 Token-Model 路由、密钥状态和配置备份；官方 Codex、Honknet、DeepSeek 的额度读取卡片属于 Windows GUI 能力，不会在 Mac 上显示为可用额度。
+
 ### Windows 安全提示
 
 本提示只适用于 GitHub 提供的未签名 EXE/ZIP 备用版本。本项目没有为这些文件购买商业代码签名证书，因此 Windows SmartScreen 可能显示“Windows 已保护你的电脑”。请先确认文件来自本仓库的 GitHub Releases，再点击“更多信息”与“仍要运行”。如果下载来源不明，请不要运行。通过 Microsoft Store 安装的正式 MSIX 由 Microsoft 签名，不使用这套手动放行流程。
+
+macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` 文件时，如果系统阻止打开，请在“系统设置 → 隐私与安全性”中允许，并确认使用的是 Apple Silicon Mac。
 
 ## 最终效果（v1.3）
 
@@ -100,16 +104,27 @@
 - 只替换顶层模型路由设置，并维护自己的 provider table。
 - 保留现有的插件、MCP、权限、features、projects 等其他配置。
 - 从 Windows 环境变量读取第三方 Key，不把 Key 写入仓库或 TOML。
-- 显示官方 Codex 剩余量、重置时间，并在窗口打开期间每 60 秒自动刷新。
-- 显示 Honknet 今日请求/tokens/费用、本月已用额度和剩余额度，并在窗口打开期间每 60 秒自动刷新。
-- 显示 DeepSeek 余额、充值余额、赠送余额和可用状态，并在窗口打开期间每 60 秒自动刷新。
+- macOS GUI 从 shell 环境变量读取第三方 Key，不把 Key 写入仓库或 TOML。
+- Windows GUI 显示官方 Codex、Honknet 和 DeepSeek 的额度/余额，并在窗口打开期间自动刷新。
+- macOS GUI 专注于 Token-Model 路由、密钥状态和配置备份；Windows 专属额度读取器不会在 Mac 上运行。
 - 切换后重启 Codex Desktop；已有任务不会改变 provider，需要新建任务。
 
 ## 系统要求
 
+### Windows
+
 - Windows 10 或 Windows 11，64 位 x64 电脑。
 - Microsoft Store 版 Codex Desktop。
 - Windows PowerShell 5.1 或 PowerShell 7。
+
+### macOS Apple Silicon
+
+- macOS 13 或更高版本。
+- Apple Silicon（M1/M2/M3/M4/M5 及后续 arm64 芯片）。Intel Mac 不支持。
+- Python 3.10+，且包含 Tkinter；推荐使用 python.org 的 macOS 安装包。
+
+### Windows 与 macOS 共通
+
 - 已至少启动并登录过一次 Codex Desktop，使下列文件存在：
 
 ```text
@@ -119,9 +134,11 @@
 
 - Honknet 和 DeepSeek 线路需要你自己合法取得的 API Key。
 - 第三方服务端必须支持 Codex 使用的 Responses API。只支持 `chat/completions` 的接口不能直接使用本项目默认配置。
-- 官方额度显示需要 Node.js 和 npm 版 `@openai/codex` CLI；未安装时三路切换仍可使用，只有额度区域显示 `Unavailable`。
-- DeepSeek 余额显示使用官方公开的 `GET https://api.deepseek.com/user/balance`，只需配置 `DEEPSEEK_API_KEY`，不需要额外安装工具。
-- Honknet 额度显示使用公开的 `GET https://ai.honknet.io/api/v1/usage`，只需配置 `HONKNET_API_KEY` 或 `HONKAI_API_KEY`，不需要额外安装工具。
+- 官方额度显示（仅 Windows GUI）需要 Node.js 和 npm 版 `@openai/codex` CLI；未安装时三路切换仍可使用，只有额度区域显示 `Unavailable`。
+- DeepSeek 余额显示（仅 Windows GUI）使用官方公开的 `GET https://api.deepseek.com/user/balance`，只需配置 `DEEPSEEK_API_KEY`，不需要额外安装工具。
+- Honknet 额度显示（仅 Windows GUI）使用公开的 `GET https://ai.honknet.io/api/v1/usage`，只需配置 `HONKNET_API_KEY` 或 `HONKAI_API_KEY`，不需要额外安装工具。
+
+macOS 版不需要安装 Node.js 或 Codex CLI 才能切换线路；Node.js/npm 版 CLI 仅用于 Windows GUI 的官方额度读取。
 
 检查 Codex CLI：
 
@@ -144,7 +161,7 @@ npm install -g @openai/codex
 - `README.md`
 - CMD、PowerShell 脚本或 Git 提交
 
-安装程序通过隐藏输入读取 Key，并保存到当前 Windows 用户的环境变量。仓库的 `.gitignore` 也会排除常见密钥和 Codex 本地配置文件，但 `.gitignore` 不是泄密后的补救措施。
+Windows 安装程序通过隐藏输入读取 Key，并保存到当前 Windows 用户的环境变量；macOS GUI 从 shell 环境变量读取 Key。仓库的 `.gitignore` 也会排除常见密钥和 Codex 本地配置文件，但 `.gitignore` 不是泄密后的补救措施。
 
 ## 源码安装（高级用户）
 
@@ -332,7 +349,7 @@ DeepSeek 官方公开接口只提供余额，不提供网页 [usage](https://pla
 
 自动刷新只在切换器窗口保持打开时运行。关闭窗口后不会安装后台服务或计划任务。
 
-## 命令行使用
+## 命令行使用（Windows）
 
 进入安装目录：
 
@@ -361,6 +378,20 @@ powershell.exe -ExecutionPolicy Bypass -File .\CodexProviderSwitcher.ps1 -Langua
 ```
 
 不指定 `-Language` 时默认使用 `zh-CN`。
+
+### macOS Apple Silicon 启动
+
+在 Mac 上进入仓库根目录后运行：
+
+```zsh
+python3 macos/TokenModelSwitch.py
+```
+
+也可以双击 `macos/Start-Token-Model-Switch.command`。Mac GUI 启动时会检查真实硬件能力；Intel Mac 会直接提示不支持。配置逻辑自测命令为：
+
+```zsh
+python3 macos/TokenModelSwitch.py --self-test
+```
 
 别名对应关系：
 
@@ -462,6 +493,15 @@ PASS: syntax, Chinese/English UI, quota reader packaging, aliases, provider/mode
 
 处理方法与 Honknet 相同。不要把 Key 写进 `providers.json`。
 
+### macOS GUI 无法打开或提示不支持
+
+1. 确认设备是 Apple Silicon（M1/M2/M3/M4/M5 或后续 M 系列），Intel Mac 不支持。
+2. 确认已安装 Python 3.10+ 且包含 Tkinter：`python3 -m tkinter` 应能打开测试窗口。
+3. 从终端运行 `python3 macos/TokenModelSwitch.py --self-test`，确认配置逻辑正常。
+4. 从 Finder 双击启动时，确认 `HONKNET_API_KEY` 和 `DEEPSEEK_API_KEY` 已写入 `~/.zshrc`；GUI 不会读取未继承到进程的临时 shell 变量。
+
+Mac 版当前不会显示 Windows 专属的额度读取器结果；这不影响 Token-Model 路由切换。
+
 ### 显示 `Official Codex remaining: Unavailable`
 
 这只代表额度查询失败，不影响三个 provider 按钮。依次检查：
@@ -532,6 +572,8 @@ DeepSeek 官方公开接口只返回余额；详细用量报表仍以 [usage](ht
 ## 卸载
 
 使用 EXE 安装版时，在 Windows“设置 > 应用 > 已安装的应用”中卸载 `Codex Three-Provider Switcher`，或使用开始菜单中的卸载入口。卸载程序文件时会保留 Codex 配置、线路备份和环境变量中的 Key。
+
+使用 macOS 版时，删除解压出的项目目录即可。它不会写入系统安装目录；`~/.codex/config.toml`、`~/.codex/provider-switch-backups/` 和 shell 环境变量中的 Key 会保留。
 
 使用源码安装方式时，在仓库目录执行：
 
