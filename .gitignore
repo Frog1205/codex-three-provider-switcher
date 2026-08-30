@@ -16,3 +16,5 @@ provider-switch-backups/
 test-results/
 .vscode/
 .idea/
+__pycache__/
+*.py[cod]
