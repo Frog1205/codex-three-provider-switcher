@@ -1,0 +1,37 @@
+{
+  "jobs": 1,
+  "tasks": [
+    {
+      "id": "login-vs-route",
+      "promptFiles": ["prompts/02-content-login-vs-route.md"],
+      "image": "02-content-login-vs-route.png",
+      "ref": ["01-cover-three-provider-switch.png"],
+      "provider": "codex-cli",
+      "ar": "9:16"
+    },
+    {
+      "id": "providers-and-quota",
+      "promptFiles": ["prompts/03-content-providers-and-quota.md"],
+      "image": "03-content-providers-and-quota.png",
+      "ref": ["01-cover-three-provider-switch.png"],
+      "provider": "codex-cli",
+      "ar": "9:16"
+    },
+    {
+      "id": "three-easy-steps",
+      "promptFiles": ["prompts/04-content-three-easy-steps.md"],
+      "image": "04-content-three-easy-steps.png",
+      "ref": ["01-cover-three-provider-switch.png"],
+      "provider": "codex-cli",
+      "ar": "9:16"
+    },
+    {
+      "id": "safety-and-github",
+      "promptFiles": ["prompts/05-ending-safety-and-github.md"],
+      "image": "05-ending-safety-and-github.png",
+      "ref": ["01-cover-three-provider-switch.png"],
+      "provider": "codex-cli",
+      "ar": "9:16"
+    }
+  ]
+}
