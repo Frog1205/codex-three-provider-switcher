@@ -15,7 +15,7 @@
 $ErrorActionPreference = 'Stop'
 $AppId = 'OpenAI.Codex_2p2nqsd0c76g0!App'
 # Release format: V_<major>.<minor>_<YYMMDD>.<daily-sequence>
-$AppVersion = 'V_1.4_261025.01'
+$AppVersion = 'V_1.4_261026.01'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Get-Providers {
@@ -48,6 +48,70 @@ function Get-CustomProviders {
 function Save-CustomProviders {
     param([object[]]$Providers)
     [IO.File]::WriteAllText((Get-CustomProvidersPath), (ConvertTo-Json -InputObject @($Providers) -Depth 8), $Utf8NoBom)
+}
+
+function Get-EnvironmentCredential {
+    param([string]$Name)
+    foreach ($scope in @('Process', 'User', 'Machine')) {
+        $value = [Environment]::GetEnvironmentVariable($Name, $scope)
+        if (-not [string]::IsNullOrWhiteSpace($value)) { return $value.Trim() }
+    }
+    return $null
+}
+
+function Get-CustomProviderKeyName {
+    param([string]$Id)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Id))
+        return 'CODEX_ROUTE_' + ([BitConverter]::ToString($hash).Replace('-', '').Substring(0, 16)) + '_API_KEY'
+    } finally { $sha.Dispose() }
+}
+
+function Resolve-CustomProviderCredential {
+    param([string]$Id, [string]$EnvironmentName, [string]$ApiKey, [object]$SavedDefinition)
+    $variableName = $EnvironmentName.Trim()
+    if (-not [string]::IsNullOrWhiteSpace($variableName)) {
+        if ($variableName -cnotmatch '^[A-Za-z_][A-Za-z0-9_]{1,63}$') { throw '环境变量名格式无效，例如 MY_API_KEY。' }
+        $resolvedKey = Get-EnvironmentCredential $variableName
+        if ([string]::IsNullOrWhiteSpace($resolvedKey)) {
+            throw "环境变量 $variableName 未设置或为空。请设置该变量，或清空环境变量名后填写 API Key。"
+        }
+        return [pscustomobject]@{ Source = 'environment'; EnvironmentName = $variableName; ApiKey = $resolvedKey; WriteKey = $false }
+    }
+    $variableName = Get-CustomProviderKeyName $Id
+    if (-not [string]::IsNullOrWhiteSpace($ApiKey)) {
+        return [pscustomobject]@{ Source = 'api_key'; EnvironmentName = $variableName; ApiKey = $ApiKey.Trim(); WriteKey = $true }
+    }
+    if ($null -ne $SavedDefinition -and [string]$SavedDefinition.id -eq $Id -and $SavedDefinition.credential_source -eq 'api_key') {
+        $resolvedKey = Get-EnvironmentCredential ([string]$SavedDefinition.env_key)
+        if (-not [string]::IsNullOrWhiteSpace($resolvedKey)) {
+            return [pscustomobject]@{ Source = 'api_key'; EnvironmentName = [string]$SavedDefinition.env_key; ApiKey = $resolvedKey; WriteKey = $false }
+        }
+    }
+    throw '请填写环境变量名或 API Key，任选一种；已保存的 Key 若不可用，请重新填写。'
+}
+
+function Set-CustomProviderKey {
+    param([string]$Name, [string]$Value)
+    [Environment]::SetEnvironmentVariable($Name, $Value, 'User')
+    [Environment]::SetEnvironmentVariable($Name, $Value, 'Process')
+}
+
+function Save-CustomProviderRoute {
+    param([string]$Name, [string]$Id, [string]$BaseUrl, [string]$Model,
+          [string]$EnvironmentName, [string]$ApiKey, [string]$WireApi, [object]$SavedDefinition)
+    $credential = Resolve-CustomProviderCredential -Id $Id -EnvironmentName $EnvironmentName -ApiKey $ApiKey -SavedDefinition $SavedDefinition
+    if ($credential.WriteKey) { Set-CustomProviderKey $credential.EnvironmentName $credential.ApiKey }
+    $definition = [pscustomobject]@{
+        id=$Id; display_name=$Name; provider_id=$Id; name=$Name; base_url=$BaseUrl
+        env_key=$credential.EnvironmentName; credential_source=$credential.Source
+        wire_api=$WireApi; model=$Model; reasoning_effort='medium'; requires_openai_auth=$false
+        disable_response_storage=$true; request_max_retries=3; stream_max_retries=3; stream_idle_timeout_ms=300000
+    }
+    $items = @(Get-CustomProviders | Where-Object { $_.id -ne $Id })
+    Save-CustomProviders @($items + $definition)
+    return $definition
 }
 
 function Get-AllProviderDefinitions {
@@ -310,15 +374,15 @@ function Show-CustomProviderDialog {
     [Windows.Forms.Application]::EnableVisualStyles()
     $dialog = New-Object Windows.Forms.Form
     $dialog.Text = '自定义接口管理'
-    $dialog.ClientSize = [Drawing.Size]::new(800, 580)
+    $dialog.ClientSize = [Drawing.Size]::new(800, 660)
     $dialog.StartPosition = 'CenterParent'
     $dialog.FormBorderStyle = 'FixedDialog'
     $dialog.MaximizeBox = $false
     $dialog.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9)
     $savedLabel = New-Object Windows.Forms.Label; $savedLabel.Text='已保存线路'; $savedLabel.Location=[Drawing.Point]::new(32,24); $savedLabel.Size=[Drawing.Size]::new(140,26); $dialog.Controls.Add($savedLabel)
     $saved = New-Object Windows.Forms.ComboBox; $saved.Location=[Drawing.Point]::new(188,22); $saved.Size=[Drawing.Size]::new(580,30); $saved.DropDownStyle='DropDownList'; $dialog.Controls.Add($saved)
-    $labels = @('线路名称', '唯一 ID', 'Base URL', '模型', '环境变量名', 'API Key', '协议')
-    $ys = @(68, 110, 152, 194, 236, 278, 320)
+    $labels = @('线路名称', '唯一 ID（线路代号）', 'Base URL', '模型 ID', '环境变量名（选填）', 'API Key', '协议')
+    $ys = @(68, 110, 174, 216, 280, 354, 426)
     $boxes = @{}
     for($i=0;$i -lt $labels.Count;$i++) {
         $label = New-Object Windows.Forms.Label; $label.Text=$labels[$i]; $label.Location=[Drawing.Point]::new(32,$ys[$i]+5); $label.Size=[Drawing.Size]::new(140,26); $dialog.Controls.Add($label)
@@ -326,12 +390,22 @@ function Show-CustomProviderDialog {
         else { $box=New-Object Windows.Forms.TextBox; $box.Size=[Drawing.Size]::new(580,30); if($i -eq 5){$box.UseSystemPasswordChar=$true} }
         $box.Location=[Drawing.Point]::new(188,$ys[$i]); $dialog.Controls.Add($box); $boxes[$i]=$box
     }
-    $note=New-Object Windows.Forms.Label; $note.Text='先测试接口，测试通过后才能保存。密钥只写入当前 Windows 用户环境变量；保存后线路不会自动切换。'; $note.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $note.Location=[Drawing.Point]::new(32,368); $note.Size=[Drawing.Size]::new(736,38); $dialog.Controls.Add($note)
-    $testStatus=New-Object Windows.Forms.Label; $testStatus.Text='尚未测试'; $testStatus.Location=[Drawing.Point]::new(32,418); $testStatus.Size=[Drawing.Size]::new(736,30); $testStatus.ForeColor=[Drawing.Color]::FromArgb(75,85,99); $dialog.Controls.Add($testStatus)
-    $test=New-Object Windows.Forms.Button; $test.Text='测试连接'; $test.Location=[Drawing.Point]::new(320,510); $test.Size=[Drawing.Size]::new(112,40); $dialog.Controls.Add($test)
-    $save=New-Object Windows.Forms.Button; $save.Text='保存配置'; $save.Location=[Drawing.Point]::new(440,510); $save.Size=[Drawing.Size]::new(112,40); $save.Enabled=$false; $dialog.Controls.Add($save)
-    $switch=New-Object Windows.Forms.Button; $switch.Text='切换线路'; $switch.Location=[Drawing.Point]::new(560,510); $switch.Size=[Drawing.Size]::new(112,40); $switch.Enabled=$false; $dialog.Controls.Add($switch)
-    $cancel=New-Object Windows.Forms.Button; $cancel.Text='关闭'; $cancel.Location=[Drawing.Point]::new(680,510); $cancel.Size=[Drawing.Size]::new(88,40); $dialog.Controls.Add($cancel)
+    foreach ($hint in @(
+        @{ Y=142; Text='自己起一个不重复的线路代号，如 my-api；2–49 位小写字母、数字、_ 或 -。' },
+        @{ Y=248; Text='从服务商的模型列表复制真实 model ID，不要填写模型昵称或界面显示名。' },
+        @{ Y=312; Text='选填，如 MY_API_KEY。填写后只读取该变量，不使用下方 API Key。' }
+    )) {
+        $help = New-Object Windows.Forms.Label
+        $help.Text=$hint.Text; $help.Location=[Drawing.Point]::new(188,$hint.Y); $help.Size=[Drawing.Size]::new(580,34)
+        $help.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $dialog.Controls.Add($help)
+    }
+    $keyHint=New-Object Windows.Forms.Label; $keyHint.Text='环境变量名留空时，直接粘贴服务商的 API Key；保存后无需重复填写。'; $keyHint.Location=[Drawing.Point]::new(188,386); $keyHint.Size=[Drawing.Size]::new(580,34); $keyHint.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $dialog.Controls.Add($keyHint)
+    $note=New-Object Windows.Forms.Label; $note.Text='先测试接口，测试通过后才能保存。API Key 安全保存在当前 Windows 用户环境中，程序自动管理；保存不会自动切换线路。'; $note.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $note.Location=[Drawing.Point]::new(32,476); $note.Size=[Drawing.Size]::new(736,44); $dialog.Controls.Add($note)
+    $testStatus=New-Object Windows.Forms.Label; $testStatus.Text='尚未测试'; $testStatus.Location=[Drawing.Point]::new(32,532); $testStatus.Size=[Drawing.Size]::new(736,44); $testStatus.ForeColor=[Drawing.Color]::FromArgb(75,85,99); $dialog.Controls.Add($testStatus)
+    $test=New-Object Windows.Forms.Button; $test.Text='测试连接'; $test.Location=[Drawing.Point]::new(320,594); $test.Size=[Drawing.Size]::new(112,40); $dialog.Controls.Add($test)
+    $save=New-Object Windows.Forms.Button; $save.Text='保存配置'; $save.Location=[Drawing.Point]::new(440,594); $save.Size=[Drawing.Size]::new(112,40); $save.Enabled=$false; $dialog.Controls.Add($save)
+    $switch=New-Object Windows.Forms.Button; $switch.Text='切换线路'; $switch.Location=[Drawing.Point]::new(560,594); $switch.Size=[Drawing.Size]::new(112,40); $switch.Enabled=$false; $dialog.Controls.Add($switch)
+    $cancel=New-Object Windows.Forms.Button; $cancel.Text='关闭'; $cancel.Location=[Drawing.Point]::new(680,594); $cancel.Size=[Drawing.Size]::new(88,40); $dialog.Controls.Add($cancel)
     foreach($button in @($test,$save,$switch,$cancel)){$button.FlatStyle='Flat';$button.FlatAppearance.BorderColor=[Drawing.Color]::FromArgb(215,220,228);$button.BackColor=[Drawing.Color]::White;$button.ForeColor=[Drawing.Color]::FromArgb(40,48,60);$button.Cursor=[Windows.Forms.Cursors]::Hand}
     $test.BackColor=[Drawing.Color]::FromArgb(37,99,235);$test.ForeColor=[Drawing.Color]::White;$test.FlatAppearance.BorderSize=0
     $switch.BackColor=[Drawing.Color]::FromArgb(37,99,235);$switch.ForeColor=[Drawing.Color]::White;$switch.FlatAppearance.BorderSize=0
@@ -342,24 +416,30 @@ function Show-CustomProviderDialog {
     $script:selectedSavedId = $null
     $invalidateTest = { $script:testPassed=$false; $save.Enabled=$false; $switch.Enabled=$false; $testStatus.Text='配置已修改，请重新测试。' }
     foreach ($box in $boxes.Values) { $box.Add_TextChanged($invalidateTest) }
+    $boxes[4].Add_TextChanged({ $boxes[5].Enabled = [string]::IsNullOrWhiteSpace($boxes[4].Text) })
     $boxes[5].Text = ''
     $saved.Add_SelectedIndexChanged({
         if($saved.SelectedIndex -lt 0){return}
         $item=$savedItems[$saved.SelectedIndex]
         $script:selectedSavedId=[string]$item.id
-        $boxes[0].Text=[string]$item.display_name; $boxes[1].Text=[string]$item.id; $boxes[2].Text=[string]$item.base_url; $boxes[3].Text=[string]$item.model; $boxes[4].Text=[string]$item.env_key
+        $boxes[0].Text=[string]$item.display_name; $boxes[1].Text=[string]$item.id; $boxes[2].Text=[string]$item.base_url; $boxes[3].Text=[string]$item.model
+        $boxes[4].Text=if($item.credential_source -eq 'api_key'){''}else{[string]$item.env_key}
+        $keyHint.Text=if($item.credential_source -eq 'api_key'){'已保存此线路的 API Key；留空继续使用，填写新 Key 可更新。'}else{'环境变量名留空时，直接粘贴服务商的 API Key；保存后无需重复填写。'}
         $boxes[6].SelectedItem=[string]$item.wire_api; $boxes[5].Text=''
     })
     $cancel.Add_Click({$dialog.DialogResult=[Windows.Forms.DialogResult]::Cancel;$dialog.Close()})
     $test.Add_Click({
-        $name=$boxes[0].Text.Trim(); $id=$boxes[1].Text.Trim().ToLowerInvariant(); $url=$boxes[2].Text.Trim().TrimEnd('/'); $model=$boxes[3].Text.Trim(); $env=$boxes[4].Text.Trim().ToUpperInvariant(); $key=$boxes[5].Text; $wire=[string]$boxes[6].SelectedItem
+        $script:testPassed=$false; $save.Enabled=$false; $switch.Enabled=$false
+        $name=$boxes[0].Text.Trim(); $id=$boxes[1].Text.Trim().ToLowerInvariant(); $url=$boxes[2].Text.Trim().TrimEnd('/'); $model=$boxes[3].Text.Trim(); $environmentName=$boxes[4].Text.Trim(); $key=$boxes[5].Text; $wire=[string]$boxes[6].SelectedItem
         if([string]::IsNullOrWhiteSpace($name)){[Windows.Forms.MessageBox]::Show('请输入线路名称');return}
         if($id -notmatch '^[a-z0-9][a-z0-9_-]{1,48}$' -or @('official','honknet','deepseek','opendev','openai').Contains($id)){[Windows.Forms.MessageBox]::Show('ID 只能是小写字母、数字、下划线或短横线，且不能占用内置 ID');return}
         if($url -notmatch '^https?://'){[Windows.Forms.MessageBox]::Show('Base URL 必须以 http:// 或 https:// 开头');return}
-        if([string]::IsNullOrWhiteSpace($model)){[Windows.Forms.MessageBox]::Show('请输入模型名');return}
-        if($env -notmatch '^[A-Z_][A-Z0-9_]{1,63}$'){[Windows.Forms.MessageBox]::Show('环境变量名格式无效');return}
-        $apiKey=if(-not [string]::IsNullOrWhiteSpace($key)){$key}else{[Environment]::GetEnvironmentVariable($env,'Process')}; if([string]::IsNullOrWhiteSpace($apiKey)){$apiKey=[Environment]::GetEnvironmentVariable($env,'User')}; if([string]::IsNullOrWhiteSpace($apiKey)){$apiKey=[Environment]::GetEnvironmentVariable($env,'Machine')}
-        if([string]::IsNullOrWhiteSpace($apiKey)){[Windows.Forms.MessageBox]::Show('请输入 API Key 进行测试');return}
+        if([string]::IsNullOrWhiteSpace($model)){[Windows.Forms.MessageBox]::Show('请从服务商的模型列表复制真实模型 ID，不要填写模型昵称。');return}
+        if(@($savedItems | Where-Object {$_.id -eq $id -and $_.id -ne $script:selectedSavedId}).Count -gt 0){[Windows.Forms.MessageBox]::Show('该线路代号已存在。请使用其他唯一 ID，或先从上方选择要编辑的线路。');return}
+        $stored=if($saved.SelectedIndex -ge 0){$savedItems[$saved.SelectedIndex]}else{$null}
+        try { $credential=Resolve-CustomProviderCredential -Id $id -EnvironmentName $environmentName -ApiKey $key -SavedDefinition $stored }
+        catch { $testStatus.Text=$_.Exception.Message; return }
+        $apiKey=$credential.ApiKey
         $test.Enabled=$false; $testStatus.Text='正在请求服务商接口...'; $dialog.Refresh()
         try {
             $headers=@{Authorization='Bearer '+$apiKey}
@@ -369,7 +449,7 @@ function Show-CustomProviderDialog {
             if($null -eq $result){throw '服务端返回空响应。'}
             $script:testPassed=$true; $save.Enabled=$true
             $sameSavedRoute=$false
-            if($saved.SelectedIndex -ge 0){$stored=$savedItems[$saved.SelectedIndex];$sameSavedRoute=([string]$stored.id -eq $id -and [string]$stored.base_url -eq $url -and [string]$stored.model -eq $model -and [string]$stored.env_key -eq $env -and [string]$stored.wire_api -eq $wire -and [string]$stored.display_name -eq $name)}
+            if($saved.SelectedIndex -ge 0){$stored=$savedItems[$saved.SelectedIndex];$sameSavedRoute=([string]$stored.id -eq $id -and [string]$stored.base_url -eq $url -and [string]$stored.model -eq $model -and [string]$stored.env_key -eq $credential.EnvironmentName -and [string]$stored.wire_api -eq $wire -and [string]$stored.display_name -eq $name -and -not $credential.WriteKey)}
             $switch.Enabled=$sameSavedRoute; $testStatus.Text='连接成功，已收到模型响应。可单独保存配置，或对已保存的同一线路执行切换。'
         }
         catch { $script:testPassed=$false; $save.Enabled=$false; $switch.Enabled=$false; $testStatus.Text=('测试失败：'+$_.Exception.Message); }
@@ -377,12 +457,10 @@ function Show-CustomProviderDialog {
     })
     $save.Add_Click({
         if(-not $script:testPassed){[Windows.Forms.MessageBox]::Show('请先完成成功的连接测试。');return}
-        $name=$boxes[0].Text.Trim(); $id=$boxes[1].Text.Trim().ToLowerInvariant(); $url=$boxes[2].Text.Trim().TrimEnd('/'); $model=$boxes[3].Text.Trim(); $env=$boxes[4].Text.Trim().ToUpperInvariant(); $key=$boxes[5].Text; $wire=[string]$boxes[6].SelectedItem
+        $name=$boxes[0].Text.Trim(); $id=$boxes[1].Text.Trim().ToLowerInvariant(); $url=$boxes[2].Text.Trim().TrimEnd('/'); $model=$boxes[3].Text.Trim(); $environmentName=$boxes[4].Text.Trim(); $key=$boxes[5].Text; $wire=[string]$boxes[6].SelectedItem
         try {
-            if(-not [string]::IsNullOrWhiteSpace($key)){[Environment]::SetEnvironmentVariable($env,$key,'User');[Environment]::SetEnvironmentVariable($env,$key,'Process')}
-            $items=@(Get-CustomProviders | Where-Object {$_.id -ne $id})
-            $items += [pscustomobject]@{id=$id;display_name=$name;provider_id=$id;name=$name;base_url=$url;env_key=$env;wire_api=$wire;model=$model;reasoning_effort='medium';requires_openai_auth=$false;disable_response_storage=$true;request_max_retries=3;stream_max_retries=3;stream_idle_timeout_ms=300000}
-            Save-CustomProviders $items
+            $stored=if($saved.SelectedIndex -ge 0){$savedItems[$saved.SelectedIndex]}else{$null}
+            Save-CustomProviderRoute -Name $name -Id $id -BaseUrl $url -Model $model -EnvironmentName $environmentName -ApiKey $key -WireApi $wire -SavedDefinition $stored | Out-Null
             [Windows.Forms.MessageBox]::Show(('线路“{0}”已保存。当前线路未改变；如需切换，请关闭窗口后在主界面单独点击对应线路。' -f $name),'保存完成')|Out-Null
             $dialog.DialogResult=[Windows.Forms.DialogResult]::OK; $dialog.Close()
         }

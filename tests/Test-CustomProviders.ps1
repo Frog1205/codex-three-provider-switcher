@@ -34,9 +34,46 @@ try {
     $backups = @(Get-ChildItem -LiteralPath (Join-Path $testRoot 'provider-switch-backups') -Filter '*.toml')
     if ($backups.Count -ne 1 -or [IO.File]::ReadAllText($backups[0].FullName) -ne $initial) { throw 'Original config backup is missing or incorrect.' }
 
+    $both = Resolve-CustomProviderCredential -Id 'both-fixture' -EnvironmentName 'CODEX_RELEASE_TEST_KEY' -ApiKey 'ignored-direct-fixture'
+    if ($both.Source -ne 'environment' -or $both.ApiKey -ne $env:CODEX_RELEASE_TEST_KEY -or $both.WriteKey) { throw 'Environment variable did not take precedence.' }
+    $missingName = 'CODEX_TEST_MISSING_' + [guid]::NewGuid().ToString('N')
+    $missingRejected = $false
+    try { Resolve-CustomProviderCredential -Id 'missing-fixture' -EnvironmentName $missingName -ApiKey 'must-not-fallback' | Out-Null }
+    catch { $missingRejected = $_.Exception.Message.Contains($missingName) }
+    if (-not $missingRejected) { throw 'A named but missing environment variable must not fall back to a direct key.' }
+    $emptyRejected = $false
+    try { Resolve-CustomProviderCredential -Id 'empty-fixture' -EnvironmentName '' -ApiKey '' | Out-Null }
+    catch { $emptyRejected = $true }
+    if (-not $emptyRejected) { throw 'Missing both credentials should be rejected.' }
+
+    # Mock only persistent key writes; the production resolver/route serialization/config writer run unchanged.
+    $script:keyWrites = 0
+    function Set-CustomProviderKey {
+        param([string]$Name, [string]$Value)
+        $script:keyWrites++
+        [Environment]::SetEnvironmentVariable($Name, $Value, 'Process')
+    }
+    $environmentRoute = Save-CustomProviderRoute -Name '变量线路' -Id 'environment-fixture' -BaseUrl 'http://127.0.0.1:1/v1' -Model 'vendor/real-model:2026-01' -EnvironmentName 'CODEX_RELEASE_TEST_KEY' -ApiKey 'ignored-direct-fixture' -WireApi 'responses'
+    if ($script:keyWrites -ne 0 -or $env:CODEX_RELEASE_TEST_KEY -ne 'offline-test-placeholder') { throw 'Named environment value was overwritten by the ignored direct key.' }
+    $directId = 'direct-' + [guid]::NewGuid().ToString('N').Substring(0,8)
+    $direct = Save-CustomProviderRoute -Name '直接填写密钥' -Id $directId -BaseUrl 'http://127.0.0.1:1/v1' -Model 'vendor/real-model:2026-01' -EnvironmentName '' -ApiKey 'direct-only-fixture' -WireApi 'responses'
+    if ($script:keyWrites -ne 1 -or $direct.credential_source -ne 'api_key' -or -not $direct.env_key) { throw 'Direct-key save failed.' }
+    if ((Get-CustomProviderKeyName 'a-b') -eq (Get-CustomProviderKeyName 'a_b')) { throw 'Distinct route IDs collided in generated key names.' }
+    $reloaded = @(Get-CustomProviders | Where-Object { $_.id -eq $directId })[0]
+    $reused = Resolve-CustomProviderCredential -Id $directId -EnvironmentName '' -ApiKey '' -SavedDefinition $reloaded
+    if ($reused.ApiKey -ne 'direct-only-fixture' -or $reused.WriteKey) { throw 'Saved direct key was not reusable without re-entry.' }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $repoRoot 'src\CodexProviderSwitcher.ps1') -Mode $directId -ConfigPath $config -NoRestart | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Direct-key route failed to switch in a fresh process.' }
+    $directConfig = [IO.File]::ReadAllText($config)
+    if (-not $directConfig.Contains('model = "vendor/real-model:2026-01"')) { throw 'Real model ID was changed.' }
+    foreach ($secretFixture in @('direct-only-fixture','ignored-direct-fixture','offline-test-placeholder')) {
+        if ($directConfig.Contains($secretFixture) -or [IO.File]::ReadAllText((Get-CustomProvidersPath)).Contains($secretFixture)) { throw 'A credential value leaked into config or route metadata.' }
+    }
+    [Environment]::SetEnvironmentVariable($direct.env_key, $null, 'Process')
+
     Save-CustomProviders @()
     if (@(Get-CustomProviders).Count -ne 0) { throw 'Empty registry failed.' }
-    Write-Output 'PASS: custom registry JSON arrays, UTF-8 names, save without switch, custom routing, config preservation, credential isolation, and exact backup.'
+    Write-Output 'PASS: custom registry, exact model IDs, environment-first credentials, no missing-variable fallback, direct-key save/reload/fresh-process switch, credential isolation, and exact backup.'
 }
 finally {
     $env:APPDATA = $previousAppData

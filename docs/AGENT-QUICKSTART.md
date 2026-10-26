@@ -13,7 +13,7 @@
 ## 功能契约
 
 - 只修改 `~/.codex/config.toml`（Windows 为 `%USERPROFILE%\\.codex\\config.toml`）的顶层路由字段，并在切换前备份。
-- 不读取、打印、提交或写入真实 API Key；第三方 Key 只从环境变量读取。
+- 不打印、提交或把真实 API Key 写入项目文件、配置或线路元数据。填写变量名时只读取该变量；只填 Key 时自动存入专用 Windows 用户变量，元数据记录 `credential_source=api_key` 和变量引用。旧版无 `credential_source` 的记录继续按环境变量模式读取。
 - Provider 标识：`openai`、`honknet`、`deepseek`、`opendev`；Windows 还支持用户自定义 ID；默认模型见 `src/providers.json`。
 - 三路额度读取失败必须降级为 `Unavailable`，不能阻断路由切换或冻结 GUI。
 - macOS 仅支持 Apple Silicon（arm64/M 系列）；Intel Mac 必须明确拒绝启动。

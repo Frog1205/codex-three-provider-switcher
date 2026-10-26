@@ -28,16 +28,16 @@
 
 请只从本项目 GitHub Releases 下载：
 
-- [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.0/Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261025.01.exe)：自动安装并创建桌面和开始菜单快捷方式。
-- [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.0/Codex-Three-Provider-Switcher-Portable-x64-V_1.4_261025.01.zip)：解压后双击启动，不写入安装目录或卸载信息。
+- [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.1/Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261026.01.exe)：自动安装并创建桌面和开始菜单快捷方式。
+- [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.1/Codex-Three-Provider-Switcher-Portable-x64-V_1.4_261026.01.zip)：解压后双击启动，不写入安装目录或卸载信息。
 - [下载 macOS Apple Silicon 历史稳定版 v1.3 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：支持 M1/M2/M3/M4/M5 及后续 Apple Silicon，Intel Mac 不支持。
 - [查看最新版本与更新说明](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest)
 
-Windows 当前版本为 **v1.4.0 / V_1.4_261025.01**。macOS 仍提供 v1.3 稳定版，本次 Windows 的自定义接口管理功能尚未移植到 macOS。
+Windows 当前版本为 **v1.4.1 / V_1.4_261026.01**。macOS 仍提供 v1.3 稳定版，本次 Windows 的自定义接口管理功能尚未移植到 macOS。
 
 ### EXE 安装版
 
-1. 下载 `Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261025.01.exe`。
+1. 下载 `Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261026.01.exe`。
 2. 双击安装，不需要管理员权限。
 3. 安装完成后，双击桌面的“Codex API 路由管理器”。
 4. 只使用 GPT 官方线路时无需配置第三方 Key。
@@ -67,9 +67,9 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 ## 👤 普通用户：界面预览（Windows v1.4）
 
-![Codex API 路由管理器 v1.4 离线测试界面](docs/ui-preview-v1.4.png)
+![Codex API 路由管理器 v1.4 离线测试界面](docs/ui-preview-v1.4.1.png)
 
-![自定义接口编辑窗口](docs/custom-editor-v1.4.png)
+![自定义接口编辑窗口](docs/custom-editor-v1.4.1.png)
 
 以上为离线测试界面，模型与额度为测试占位信息，不代表服务商在线连通性。
 
@@ -77,7 +77,7 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 ![Codex Provider Switcher V_1.3_260829.02 历史界面](docs/ui-preview-v1.3.png)
 
-`V_1.3_260829.02` 截图仅作历史参考。当前 Windows 版 `V_1.4_261025.01` 已更名为“Codex API 路由管理器”，界面按“官方 OpenAI / 自定义接口”两类入口组织；自定义接口包含 Honknet、DeepSeek、OpenDev 和用户添加的线路。
+`V_1.3_260829.02` 截图仅作历史参考。当前 Windows 版 `V_1.4_261026.01` 已更名为“Codex API 路由管理器”，界面按“官方 OpenAI / 自定义接口”两类入口组织；自定义接口包含 Honknet、DeepSeek、OpenDev 和用户添加的线路。
 
 不同版本的 GUI 外观和变化请查看 [GUI 版本对照](docs/GUI-VERSIONS.md)。
 
@@ -662,7 +662,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Releas
 如需保留历史产物并生成带版本标识的新安装包，可追加 `-ArtifactSuffix`，例如：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.4.0 -ArtifactSuffix V_1.4_261025.01
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.4.1 -ArtifactSuffix V_1.4_261026.01
 ```
 
 这会生成带后缀的 EXE 和 ZIP，不覆盖默认文件名的旧版本产物。
@@ -677,9 +677,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Releas
 
 ## 自定义第三方 API 线路
 
-“自定义接口”页中的“管理 / 添加接口”可以查看已保存线路、新增或编辑线路，支持输入：线路名称、唯一 ID、Base URL、模型名、环境变量名、API Key 和协议（`responses` 或 `chat_completions`）。先点“测试连接”，成功后“保存配置”才可用；测试请求分别调用 `/responses` 或 `/chat/completions`，失败不会保存。保存和切换是两个独立操作：
+“自定义接口”页中的“管理 / 添加接口”可以查看已保存线路、新增或编辑线路，支持输入：线路名称、唯一 ID（线路代号）、Base URL、真实模型 ID、环境变量名（选填）、API Key 和协议（`responses` 或 `chat_completions`）。先点“测试连接”，成功后“保存配置”才可用；测试请求分别调用 `/responses` 或 `/chat/completions`，失败不会保存。保存和切换是两个独立操作：
 
-- 把 Key 写入当前 Windows 用户环境变量；Key 不写入仓库、`config.toml` 或自定义线路注册表。
+- 唯一 ID 是自己起的内部线路代号，例如 `my-api`；2–49 位小写字母、数字、下划线或短横线，不能和已有线路或内置 ID 重复。
+- 模型 ID 必须从服务商的模型列表复制真实 `model` / `id`，不能填显示昵称；测试和切换会原样使用此 ID。
+- 环境变量名与 API Key 任选一种。填写变量名时只读取该变量，API Key 输入框停用；变量缺失或为空会报错，不回退使用 Key，也不覆盖已有变量。
+- 环境变量名留空时使用直接填写的 API Key。程序自动管理专用的 Windows 用户变量，用户无需起变量名；重新打开已保存线路时，Key 留空即可沿用，填入新 Key 则更新。Key 不写入仓库、`config.toml` 或自定义线路注册表。
 - 把线路定义保存到 `%APPDATA%\CodexThreeProviderSwitcher\custom-providers.json`，其中只保存变量名和路由参数。
 - 保存配置不会改变当前路由。选择已保存线路并成功测试后，才可单独点击“切换线路”；切换复用现有的 `config.toml` 原子写入、切换前备份和 Codex 重启流程。
 

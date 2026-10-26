@@ -30,7 +30,7 @@ try {
         if (-not $switcherText.Contains($requiredCustomFlow)) { throw "Custom provider test/save/switch flow is incomplete: $requiredCustomFlow" }
     }
     if ($switcherText -notmatch '\$customRouteList\.Size = \[Drawing\.Size\]::new\(654, 144\)' -or
-        $switcherText -notmatch '\$dialog\.ClientSize = \[Drawing\.Size\]::new\(800, 580\)' -or
+        $switcherText -notmatch '\$dialog\.ClientSize = \[Drawing\.Size\]::new\(800, 660\)' -or
         $switcherText.Contains('API Key（仅本次测试/保存）')) {
         throw 'The custom route list and editor must keep the revised spacious layout.'
     }
