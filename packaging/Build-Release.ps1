@@ -1,4 +1,4 @@
-param(
+﻿param(
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version = '1.0.0',
     [ValidatePattern('^[A-Za-z0-9._-]+$')]
@@ -38,6 +38,7 @@ try {
     foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'Get-HonkaiUsage.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json')) {
         [IO.File]::Copy((Join-Path $repoRoot "src\$file"), (Join-Path $portableRoot "src\$file"), $true)
     }
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'src\assets') -Destination (Join-Path $portableRoot 'src\assets') -Recurse
     foreach ($file in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'PORTABLE-README.md')) {
         [IO.File]::Copy((Join-Path $repoRoot "portable\$file"), (Join-Path $portableRoot $file), $true)
     }

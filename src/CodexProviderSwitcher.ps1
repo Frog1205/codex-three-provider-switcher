@@ -1,5 +1,4 @@
 ﻿param(
-    [ValidateSet('gui', 'official', 'gpt', 'honkai', 'honknet', 'deepseek', 'ds', 'status')]
     [string]$Mode = 'gui',
     [string]$ConfigPath = (Join-Path $env:USERPROFILE '.codex\config.toml'),
     [string]$ProvidersPath = (Join-Path $PSScriptRoot 'providers.json'),
@@ -16,7 +15,7 @@
 $ErrorActionPreference = 'Stop'
 $AppId = 'OpenAI.Codex_2p2nqsd0c76g0!App'
 # Release format: V_<major>.<minor>_<YYMMDD>.<daily-sequence>
-$AppVersion = 'V_1.3_260829.02'
+$AppVersion = 'V_1.4_261025.01'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Get-Providers {
@@ -24,18 +23,54 @@ function Get-Providers {
         throw "Provider definitions not found: $ProvidersPath"
     }
     try {
-        return Get-Content -Raw -LiteralPath $ProvidersPath | ConvertFrom-Json
+        return Get-Content -Raw -Encoding UTF8 -LiteralPath $ProvidersPath | ConvertFrom-Json
     }
     catch {
         throw "Provider definitions are invalid JSON: $ProvidersPath"
     }
 }
 
-function Get-Definition {
-    param([ValidateSet('official', 'honknet', 'deepseek')][string]$Provider)
+function Get-CustomProvidersPath {
+    $dir = Join-Path $env:APPDATA 'CodexThreeProviderSwitcher'
+    [IO.Directory]::CreateDirectory($dir) | Out-Null
+    return Join-Path $dir 'custom-providers.json'
+}
 
-    $definitions = Get-Providers
-    $definition = $definitions.$Provider
+function Get-CustomProviders {
+    $path = Get-CustomProvidersPath
+    if (-not (Test-Path -LiteralPath $path)) { return @() }
+    try {
+        $items = Get-Content -Raw -Encoding UTF8 -LiteralPath $path | ConvertFrom-Json
+        return @($items | Where-Object { $_.id -and $_.base_url -and $_.env_key })
+    } catch { return @() }
+}
+
+function Save-CustomProviders {
+    param([object[]]$Providers)
+    [IO.File]::WriteAllText((Get-CustomProvidersPath), (ConvertTo-Json -InputObject @($Providers) -Depth 8), $Utf8NoBom)
+}
+
+function Get-AllProviderDefinitions {
+    $builtins = Get-Providers
+    $result = [ordered]@{}
+    foreach ($id in @('official','honknet','deepseek','opendev')) { $result[$id] = $builtins.$id }
+    foreach ($item in Get-CustomProviders) {
+        $alreadyBundled = @($result.Values | Where-Object {
+            $_.base_url -and $_.env_key -and $_.model -and
+            [string]$_.base_url -eq [string]$item.base_url -and
+            [string]$_.env_key -eq [string]$item.env_key -and
+            [string]$_.model -eq [string]$item.model
+        }).Count -gt 0
+        if (-not $alreadyBundled) { $result[[string]$item.id] = $item }
+    }
+    return $result
+}
+
+function Get-Definition {
+    param([string]$Provider)
+
+    $definitions = Get-AllProviderDefinitions
+    $definition = $definitions[$Provider]
     if ($null -eq $definition) { throw "Provider definition is missing: $Provider" }
     return $definition
 }
@@ -75,7 +110,7 @@ function Test-Catalog {
     if ($null -eq $catalogPath) { return $true }
     if (-not (Test-Path -LiteralPath $catalogPath)) { return $false }
     try {
-        $catalog = Get-Content -Raw -LiteralPath $catalogPath | ConvertFrom-Json
+        $catalog = Get-Content -Raw -Encoding UTF8 -LiteralPath $catalogPath | ConvertFrom-Json
         return @($catalog.models | Where-Object { $_.slug -eq $Definition.model }).Count -gt 0
     }
     catch { return $false }
@@ -89,23 +124,10 @@ function Get-CurrentState {
     $provider = Get-TopLevelValue $text 'model_provider'
     if ([string]::IsNullOrWhiteSpace($provider)) { $provider = 'openai' }
     $model = Get-TopLevelValue $text 'model'
-    $definitions = Get-Providers
-    $display = switch ($provider.ToLowerInvariant()) {
-        'openai' { [string]$definitions.official.display_name }
-        'honknet' { [string]$definitions.honknet.display_name }
-        'deepseek' { [string]$definitions.deepseek.display_name }
-        'custom' {
-            $customBlock = [regex]::Match(
-                $text,
-                '(?ms)^[ \t]*\[model_providers\.custom\][ \t]*\r?\n.*?(?=^[ \t]*\[|\z)'
-            ).Value
-            if ($customBlock -match '(?im)^[ \t]*base_url[ \t]*=[ \t]*["''][^"'']*honknet[^"'']*["'']') {
-                "$($definitions.honknet.display_name) (legacy)"
-            }
-            else { 'custom' }
-        }
-        default { $provider }
-    }
+    $definitions = Get-AllProviderDefinitions
+    if ($provider -eq 'openai') { $providerKey = 'official' } else { $providerKey = $provider }
+    $definition = $definitions[$providerKey]
+    $display = if ($null -ne $definition) { [string]$definition.display_name } else { $provider }
     return [pscustomobject]@{ Provider = $provider; Model = $model; Display = $display }
 }
 
@@ -134,7 +156,7 @@ function New-ProviderBlock {
 }
 
 function New-SwitchedConfig {
-    param([ValidateSet('official', 'honknet', 'deepseek')][string]$Provider)
+    param([string]$Provider)
 
     if (-not (Test-Path -LiteralPath $ConfigPath)) { throw "Config file not found: $ConfigPath" }
     $definition = Get-Definition $Provider
@@ -250,7 +272,7 @@ function Write-ConfigAtomically {
 
 function Set-CodexProvider {
     param(
-        [ValidateSet('official', 'honknet', 'deepseek')][string]$Provider,
+        [string]$Provider,
         [bool]$Interactive
     )
 
@@ -282,6 +304,101 @@ function Set-CodexProvider {
     return $true
 }
 
+function Show-CustomProviderDialog {
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
+    [Windows.Forms.Application]::EnableVisualStyles()
+    $dialog = New-Object Windows.Forms.Form
+    $dialog.Text = '自定义接口管理'
+    $dialog.ClientSize = [Drawing.Size]::new(800, 580)
+    $dialog.StartPosition = 'CenterParent'
+    $dialog.FormBorderStyle = 'FixedDialog'
+    $dialog.MaximizeBox = $false
+    $dialog.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9)
+    $savedLabel = New-Object Windows.Forms.Label; $savedLabel.Text='已保存线路'; $savedLabel.Location=[Drawing.Point]::new(32,24); $savedLabel.Size=[Drawing.Size]::new(140,26); $dialog.Controls.Add($savedLabel)
+    $saved = New-Object Windows.Forms.ComboBox; $saved.Location=[Drawing.Point]::new(188,22); $saved.Size=[Drawing.Size]::new(580,30); $saved.DropDownStyle='DropDownList'; $dialog.Controls.Add($saved)
+    $labels = @('线路名称', '唯一 ID', 'Base URL', '模型', '环境变量名', 'API Key', '协议')
+    $ys = @(68, 110, 152, 194, 236, 278, 320)
+    $boxes = @{}
+    for($i=0;$i -lt $labels.Count;$i++) {
+        $label = New-Object Windows.Forms.Label; $label.Text=$labels[$i]; $label.Location=[Drawing.Point]::new(32,$ys[$i]+5); $label.Size=[Drawing.Size]::new(140,26); $dialog.Controls.Add($label)
+        if($i -eq 6) { $box=New-Object Windows.Forms.ComboBox; $box.Items.AddRange(@('responses','chat_completions')); $box.SelectedIndex=0; $box.DropDownStyle='DropDownList'; $box.Size=[Drawing.Size]::new(580,30) }
+        else { $box=New-Object Windows.Forms.TextBox; $box.Size=[Drawing.Size]::new(580,30); if($i -eq 5){$box.UseSystemPasswordChar=$true} }
+        $box.Location=[Drawing.Point]::new(188,$ys[$i]); $dialog.Controls.Add($box); $boxes[$i]=$box
+    }
+    $note=New-Object Windows.Forms.Label; $note.Text='先测试接口，测试通过后才能保存。密钥只写入当前 Windows 用户环境变量；保存后线路不会自动切换。'; $note.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $note.Location=[Drawing.Point]::new(32,368); $note.Size=[Drawing.Size]::new(736,38); $dialog.Controls.Add($note)
+    $testStatus=New-Object Windows.Forms.Label; $testStatus.Text='尚未测试'; $testStatus.Location=[Drawing.Point]::new(32,418); $testStatus.Size=[Drawing.Size]::new(736,30); $testStatus.ForeColor=[Drawing.Color]::FromArgb(75,85,99); $dialog.Controls.Add($testStatus)
+    $test=New-Object Windows.Forms.Button; $test.Text='测试连接'; $test.Location=[Drawing.Point]::new(320,510); $test.Size=[Drawing.Size]::new(112,40); $dialog.Controls.Add($test)
+    $save=New-Object Windows.Forms.Button; $save.Text='保存配置'; $save.Location=[Drawing.Point]::new(440,510); $save.Size=[Drawing.Size]::new(112,40); $save.Enabled=$false; $dialog.Controls.Add($save)
+    $switch=New-Object Windows.Forms.Button; $switch.Text='切换线路'; $switch.Location=[Drawing.Point]::new(560,510); $switch.Size=[Drawing.Size]::new(112,40); $switch.Enabled=$false; $dialog.Controls.Add($switch)
+    $cancel=New-Object Windows.Forms.Button; $cancel.Text='关闭'; $cancel.Location=[Drawing.Point]::new(680,510); $cancel.Size=[Drawing.Size]::new(88,40); $dialog.Controls.Add($cancel)
+    foreach($button in @($test,$save,$switch,$cancel)){$button.FlatStyle='Flat';$button.FlatAppearance.BorderColor=[Drawing.Color]::FromArgb(215,220,228);$button.BackColor=[Drawing.Color]::White;$button.ForeColor=[Drawing.Color]::FromArgb(40,48,60);$button.Cursor=[Windows.Forms.Cursors]::Hand}
+    $test.BackColor=[Drawing.Color]::FromArgb(37,99,235);$test.ForeColor=[Drawing.Color]::White;$test.FlatAppearance.BorderSize=0
+    $switch.BackColor=[Drawing.Color]::FromArgb(37,99,235);$switch.ForeColor=[Drawing.Color]::White;$switch.FlatAppearance.BorderSize=0
+    $savedItems = @(Get-CustomProviders)
+    foreach ($item in $savedItems) { [void]$saved.Items.Add(('{0} ({1})' -f $item.display_name,$item.id)) }
+    $saved.SelectedIndex = -1
+    $script:testPassed = $false
+    $script:selectedSavedId = $null
+    $invalidateTest = { $script:testPassed=$false; $save.Enabled=$false; $switch.Enabled=$false; $testStatus.Text='配置已修改，请重新测试。' }
+    foreach ($box in $boxes.Values) { $box.Add_TextChanged($invalidateTest) }
+    $boxes[5].Text = ''
+    $saved.Add_SelectedIndexChanged({
+        if($saved.SelectedIndex -lt 0){return}
+        $item=$savedItems[$saved.SelectedIndex]
+        $script:selectedSavedId=[string]$item.id
+        $boxes[0].Text=[string]$item.display_name; $boxes[1].Text=[string]$item.id; $boxes[2].Text=[string]$item.base_url; $boxes[3].Text=[string]$item.model; $boxes[4].Text=[string]$item.env_key
+        $boxes[6].SelectedItem=[string]$item.wire_api; $boxes[5].Text=''
+    })
+    $cancel.Add_Click({$dialog.DialogResult=[Windows.Forms.DialogResult]::Cancel;$dialog.Close()})
+    $test.Add_Click({
+        $name=$boxes[0].Text.Trim(); $id=$boxes[1].Text.Trim().ToLowerInvariant(); $url=$boxes[2].Text.Trim().TrimEnd('/'); $model=$boxes[3].Text.Trim(); $env=$boxes[4].Text.Trim().ToUpperInvariant(); $key=$boxes[5].Text; $wire=[string]$boxes[6].SelectedItem
+        if([string]::IsNullOrWhiteSpace($name)){[Windows.Forms.MessageBox]::Show('请输入线路名称');return}
+        if($id -notmatch '^[a-z0-9][a-z0-9_-]{1,48}$' -or @('official','honknet','deepseek','opendev','openai').Contains($id)){[Windows.Forms.MessageBox]::Show('ID 只能是小写字母、数字、下划线或短横线，且不能占用内置 ID');return}
+        if($url -notmatch '^https?://'){[Windows.Forms.MessageBox]::Show('Base URL 必须以 http:// 或 https:// 开头');return}
+        if([string]::IsNullOrWhiteSpace($model)){[Windows.Forms.MessageBox]::Show('请输入模型名');return}
+        if($env -notmatch '^[A-Z_][A-Z0-9_]{1,63}$'){[Windows.Forms.MessageBox]::Show('环境变量名格式无效');return}
+        $apiKey=if(-not [string]::IsNullOrWhiteSpace($key)){$key}else{[Environment]::GetEnvironmentVariable($env,'Process')}; if([string]::IsNullOrWhiteSpace($apiKey)){$apiKey=[Environment]::GetEnvironmentVariable($env,'User')}; if([string]::IsNullOrWhiteSpace($apiKey)){$apiKey=[Environment]::GetEnvironmentVariable($env,'Machine')}
+        if([string]::IsNullOrWhiteSpace($apiKey)){[Windows.Forms.MessageBox]::Show('请输入 API Key 进行测试');return}
+        $test.Enabled=$false; $testStatus.Text='正在请求服务商接口...'; $dialog.Refresh()
+        try {
+            $headers=@{Authorization='Bearer '+$apiKey}
+            if($wire -eq 'responses'){$body=@{model=$model;input='Reply with the single word OK.';store=$false}|ConvertTo-Json -Depth 5;$uri=$url+'/responses'}
+            else{$body=@{model=$model;messages=@(@{role='user';content='Reply with the single word OK.'});max_tokens=8}|ConvertTo-Json -Depth 5;$uri=$url+'/chat/completions'}
+            $result=Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType 'application/json' -Body $body -TimeoutSec 30
+            if($null -eq $result){throw '服务端返回空响应。'}
+            $script:testPassed=$true; $save.Enabled=$true
+            $sameSavedRoute=$false
+            if($saved.SelectedIndex -ge 0){$stored=$savedItems[$saved.SelectedIndex];$sameSavedRoute=([string]$stored.id -eq $id -and [string]$stored.base_url -eq $url -and [string]$stored.model -eq $model -and [string]$stored.env_key -eq $env -and [string]$stored.wire_api -eq $wire -and [string]$stored.display_name -eq $name)}
+            $switch.Enabled=$sameSavedRoute; $testStatus.Text='连接成功，已收到模型响应。可单独保存配置，或对已保存的同一线路执行切换。'
+        }
+        catch { $script:testPassed=$false; $save.Enabled=$false; $switch.Enabled=$false; $testStatus.Text=('测试失败：'+$_.Exception.Message); }
+        finally{$test.Enabled=$true}
+    })
+    $save.Add_Click({
+        if(-not $script:testPassed){[Windows.Forms.MessageBox]::Show('请先完成成功的连接测试。');return}
+        $name=$boxes[0].Text.Trim(); $id=$boxes[1].Text.Trim().ToLowerInvariant(); $url=$boxes[2].Text.Trim().TrimEnd('/'); $model=$boxes[3].Text.Trim(); $env=$boxes[4].Text.Trim().ToUpperInvariant(); $key=$boxes[5].Text; $wire=[string]$boxes[6].SelectedItem
+        try {
+            if(-not [string]::IsNullOrWhiteSpace($key)){[Environment]::SetEnvironmentVariable($env,$key,'User');[Environment]::SetEnvironmentVariable($env,$key,'Process')}
+            $items=@(Get-CustomProviders | Where-Object {$_.id -ne $id})
+            $items += [pscustomobject]@{id=$id;display_name=$name;provider_id=$id;name=$name;base_url=$url;env_key=$env;wire_api=$wire;model=$model;reasoning_effort='medium';requires_openai_auth=$false;disable_response_storage=$true;request_max_retries=3;stream_max_retries=3;stream_idle_timeout_ms=300000}
+            Save-CustomProviders $items
+            [Windows.Forms.MessageBox]::Show(('线路“{0}”已保存。当前线路未改变；如需切换，请关闭窗口后在主界面单独点击对应线路。' -f $name),'保存完成')|Out-Null
+            $dialog.DialogResult=[Windows.Forms.DialogResult]::OK; $dialog.Close()
+        }
+        catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message,'保存失败',[Windows.Forms.MessageBoxButtons]::OK,[Windows.Forms.MessageBoxIcon]::Error)|Out-Null }
+    })
+    $switch.Add_Click({
+        if(-not $script:testPassed -or [string]::IsNullOrWhiteSpace($script:selectedSavedId)){return}
+        try {
+            Set-CodexProvider $script:selectedSavedId $true | Out-Null
+            $dialog.DialogResult=[Windows.Forms.DialogResult]::OK; $dialog.Close()
+        }
+        catch { [Windows.Forms.MessageBox]::Show($_.Exception.Message,'切换失败',[Windows.Forms.MessageBoxButtons]::OK,[Windows.Forms.MessageBoxIcon]::Error)|Out-Null }
+    })
+    [void]$dialog.ShowDialog()
+    return ($dialog.DialogResult -eq [Windows.Forms.DialogResult]::OK)
+}
 function Show-Switcher {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
@@ -291,13 +408,21 @@ function Show-Switcher {
     $uiState = @{ Language = $Language }
     $strings = @{
         'zh-CN' = @{
-            FormTitle = 'Codex 三线路切换器'
-            Title = 'Codex 线路切换器'
-            Subtitle = 'Token · Model 路由管理器'
+            FormTitle = 'Codex API 路由管理器'
+            Title = 'Codex API 路由管理器'
+            Subtitle = '官方 OpenAI · 自定义接口'
             VersionLabel = '版本 {0}'
             LanguageButton = 'English'
             RouteOverview = '当前路由'
-            ProviderRoutes = '可用线路'
+            ProviderRoutes = '线路类型'
+            OfficialCategory = '官方 OpenAI'
+            CustomCategory = '自定义接口'
+            CustomRouteHint = 'DeepSeek、Honknet、OpenDev 及你添加的接口'
+            AddCustomRoute = '管理 / 添加接口'
+            SwitchSelectedRoute = '切换所选接口'
+            RouteNameColumn = '接口'
+            RouteModelColumn = '模型'
+            RouteStatusColumn = '状态'
             UsageOverview = '额度与用量'
             ActiveRoute = '当前线路'
             SwitchRoute = '切换到此线路'
@@ -318,7 +443,7 @@ function Show-Switcher {
             DeepSeekButton = 'DeepSeek'
             LegacySuffix = '（旧配置）'
             Health = 'Honknet 密钥：{0}    DeepSeek 密钥：{1}    模型目录：{2}'
-            HealthSummary = '密钥 {0}/2  ·  模型目录 {1}'
+            HealthSummary = '已配置接口 {0}/{1}  ·  模型目录 {2}'
             Ready = '已配置'
             Missing = '未配置'
             CatalogReady = '可用'
@@ -382,13 +507,21 @@ function Show-Switcher {
             Privacy = '密钥仅从 Windows 环境变量读取；切换前会自动备份配置。'
         }
         'en' = @{
-            FormTitle = 'Codex Three-Provider Switcher'
-            Title = 'Codex Provider Switcher'
-            Subtitle = 'Token · Model Routing Manager'
+            FormTitle = 'Codex API Route Manager'
+            Title = 'Codex API Route Manager'
+            Subtitle = 'Official OpenAI · Custom endpoints'
             VersionLabel = 'Version {0}'
             LanguageButton = '中文'
             RouteOverview = 'ACTIVE ROUTE'
-            ProviderRoutes = 'AVAILABLE ROUTES'
+            ProviderRoutes = 'ROUTE TYPE'
+            OfficialCategory = 'Official OpenAI'
+            CustomCategory = 'Custom endpoints'
+            CustomRouteHint = 'DeepSeek, Honknet, OpenDev, and endpoints you add'
+            AddCustomRoute = 'Manage / add endpoint'
+            SwitchSelectedRoute = 'Switch to selected endpoint'
+            RouteNameColumn = 'Endpoint'
+            RouteModelColumn = 'Model'
+            RouteStatusColumn = 'Status'
             UsageOverview = 'QUOTA & USAGE'
             ActiveRoute = 'Active route'
             SwitchRoute = 'Use this route'
@@ -409,7 +542,7 @@ function Show-Switcher {
             DeepSeekButton = 'DeepSeek'
             LegacySuffix = ' (legacy)'
             Health = 'Honknet Key: {0}    DeepSeek Key: {1}    Catalog: {2}'
-            HealthSummary = 'Keys {0}/2  ·  Catalog {1}'
+            HealthSummary = 'Configured endpoints {0}/{1}  ·  Catalog {2}'
             Ready = 'Ready'
             Missing = 'Missing'
             CatalogReady = 'Ready'
@@ -490,7 +623,9 @@ function Show-Switcher {
     }
 
     $form = New-Object Windows.Forms.Form
-    $form.ClientSize = New-Object Drawing.Size(960, 720)
+    $iconPath = Join-Path $PSScriptRoot 'assets\codex-switcher-icon.ico'
+    if (Test-Path -LiteralPath $iconPath) { $form.Icon = [Drawing.Icon]::new($iconPath) }
+    $form.ClientSize = [Drawing.Size]::new(1000, 780)
     $form.StartPosition = 'CenterScreen'
     $form.FormBorderStyle = 'FixedDialog'
     $form.MaximizeBox = $false
@@ -505,8 +640,8 @@ function Show-Switcher {
         $outer.Size = $Size
         $outer.BackColor = $theme.Border
         $inner = New-Object Windows.Forms.Panel
-        $inner.Location = New-Object Drawing.Point(1, 1)
-        $inner.Size = New-Object Drawing.Size(($Size.Width - 2), ($Size.Height - 2))
+        $inner.Location = [Drawing.Point]::new(1, 1)
+        $inner.Size = [Drawing.Size]::new(($Size.Width - 2), ($Size.Height - 2))
         $inner.BackColor = $theme.Surface
         $outer.Controls.Add($inner)
         $form.Controls.Add($outer)
@@ -526,36 +661,36 @@ function Show-Switcher {
     $title = New-Object Windows.Forms.Label
     $title.Font = New-Object Drawing.Font('Microsoft YaHei UI', 18, [Drawing.FontStyle]::Bold)
     $title.AutoSize = $true
-    $title.Location = New-Object Drawing.Point(32, 20)
+    $title.Location = [Drawing.Point]::new(32, 20)
     $form.Controls.Add($title)
 
     $subtitle = New-Object Windows.Forms.Label
     $subtitle.AutoSize = $true
     $subtitle.ForeColor = $theme.Muted
-    $subtitle.Location = New-Object Drawing.Point(34, 55)
+    $subtitle.Location = [Drawing.Point]::new(34, 55)
     $form.Controls.Add($subtitle)
 
     $versionLabel = New-Object Windows.Forms.Label
     $versionLabel.AutoSize = $true
     $versionLabel.ForeColor = $theme.Muted
-    $versionLabel.Location = New-Object Drawing.Point(310, 55)
+    $versionLabel.Location = [Drawing.Point]::new(310, 55)
     $form.Controls.Add($versionLabel)
 
     $languageButton = New-Object Windows.Forms.Button
-    $languageButton.Size = New-Object Drawing.Size(82, 34)
-    $languageButton.Location = New-Object Drawing.Point(846, 22)
+    $languageButton.Size = [Drawing.Size]::new(82, 34)
+    $languageButton.Location = [Drawing.Point]::new(886, 22)
     & $styleButton $languageButton $false
     $form.Controls.Add($languageButton)
 
     $refreshQuotaButton = New-Object Windows.Forms.Button
-    $refreshQuotaButton.Size = New-Object Drawing.Size(92, 34)
-    $refreshQuotaButton.Location = New-Object Drawing.Point(742, 22)
+    $refreshQuotaButton.Size = [Drawing.Size]::new(92, 34)
+    $refreshQuotaButton.Location = [Drawing.Point]::new(782, 22)
     & $styleButton $refreshQuotaButton $false
     $form.Controls.Add($refreshQuotaButton)
 
     $syncStatus = New-Object Windows.Forms.Label
-    $syncStatus.Size = New-Object Drawing.Size(300, 20)
-    $syncStatus.Location = New-Object Drawing.Point(530, 61)
+    $syncStatus.Size = [Drawing.Size]::new(340, 20)
+    $syncStatus.Location = [Drawing.Point]::new(530, 61)
     $syncStatus.TextAlign = [Drawing.ContentAlignment]::MiddleRight
     $syncStatus.ForeColor = $theme.Muted
     $form.Controls.Add($syncStatus)
@@ -564,13 +699,13 @@ function Show-Switcher {
     $routeSection.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9, [Drawing.FontStyle]::Bold)
     $routeSection.ForeColor = $theme.Muted
     $routeSection.AutoSize = $true
-    $routeSection.Location = New-Object Drawing.Point(32, 92)
+    $routeSection.Location = [Drawing.Point]::new(32, 92)
     $form.Controls.Add($routeSection)
 
-    $currentCard = & $newCard (New-Object Drawing.Point(32, 116)) (New-Object Drawing.Size(896, 88))
+    $currentCard = & $newCard ([Drawing.Point]::new(32, 116)) ([Drawing.Size]::new(936, 88))
     $currentStripe = New-Object Windows.Forms.Panel
-    $currentStripe.Location = New-Object Drawing.Point(0, 0)
-    $currentStripe.Size = New-Object Drawing.Size(4, 86)
+    $currentStripe.Location = [Drawing.Point]::new(0, 0)
+    $currentStripe.Size = [Drawing.Size]::new(4, 86)
     $currentStripe.BackColor = $theme.Primary
     $currentCard.Inner.Controls.Add($currentStripe)
 
@@ -579,31 +714,31 @@ function Show-Switcher {
     $statusDot.ForeColor = $theme.Success
     $statusDot.Font = New-Object Drawing.Font('Segoe UI', 11)
     $statusDot.AutoSize = $true
-    $statusDot.Location = New-Object Drawing.Point(22, 18)
+    $statusDot.Location = [Drawing.Point]::new(22, 18)
     $currentCard.Inner.Controls.Add($statusDot)
 
     $status = New-Object Windows.Forms.Label
     $status.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
-    $status.Size = New-Object Drawing.Size(270, 26)
-    $status.Location = New-Object Drawing.Point(46, 16)
+    $status.Size = [Drawing.Size]::new(270, 26)
+    $status.Location = [Drawing.Point]::new(46, 16)
     $currentCard.Inner.Controls.Add($status)
 
     $currentModel = New-Object Windows.Forms.Label
     $currentModel.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
-    $currentModel.Size = New-Object Drawing.Size(300, 26)
-    $currentModel.Location = New-Object Drawing.Point(330, 16)
+    $currentModel.Size = [Drawing.Size]::new(300, 26)
+    $currentModel.Location = [Drawing.Point]::new(330, 16)
     $currentModel.ForeColor = $theme.Success
     $currentCard.Inner.Controls.Add($currentModel)
 
     $hint = New-Object Windows.Forms.Label
-    $hint.Size = New-Object Drawing.Size(540, 34)
-    $hint.Location = New-Object Drawing.Point(48, 47)
+    $hint.Size = [Drawing.Size]::new(540, 34)
+    $hint.Location = [Drawing.Point]::new(48, 47)
     $hint.ForeColor = $theme.Muted
     $currentCard.Inner.Controls.Add($hint)
 
     $health = New-Object Windows.Forms.Label
-    $health.Size = New-Object Drawing.Size(278, 50)
-    $health.Location = New-Object Drawing.Point(590, 20)
+    $health.Size = [Drawing.Size]::new(278, 50)
+    $health.Location = [Drawing.Point]::new(590, 20)
     $health.TextAlign = [Drawing.ContentAlignment]::MiddleRight
     $health.ForeColor = $theme.Muted
     $currentCard.Inner.Controls.Add($health)
@@ -612,176 +747,172 @@ function Show-Switcher {
     $providerSection.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9, [Drawing.FontStyle]::Bold)
     $providerSection.ForeColor = $theme.Muted
     $providerSection.AutoSize = $true
-    $providerSection.Location = New-Object Drawing.Point(32, 222)
+    $providerSection.Location = [Drawing.Point]::new(32, 224)
     $form.Controls.Add($providerSection)
 
-    $buttonSpecs = @(
-        @{ TextKey = 'OfficialButton'; Provider = 'official'; X = 32; Color = [Drawing.Color]::FromArgb(16, 163, 127) },
-        @{ TextKey = 'HonknetButton'; Provider = 'honknet'; X = 336; Color = [Drawing.Color]::FromArgb(37, 99, 235) },
-        @{ TextKey = 'DeepSeekButton'; Provider = 'deepseek'; X = 640; Color = [Drawing.Color]::FromArgb(109, 40, 217) }
-    )
+    $routeTabs = New-Object Windows.Forms.TabControl
+    $routeTabs.Location = [Drawing.Point]::new(32, 248)
+    $routeTabs.Size = [Drawing.Size]::new(936, 226)
+    $routeTabs.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9)
+    $routeTabs.Padding = [Drawing.Point]::new(14, 6)
+    $officialPage = New-Object Windows.Forms.TabPage
+    $customPage = New-Object Windows.Forms.TabPage
+    $officialPage.BackColor = $theme.Surface
+    $customPage.BackColor = $theme.Surface
+    $routeTabs.TabPages.Add($officialPage)
+    $routeTabs.TabPages.Add($customPage)
+    $form.Controls.Add($routeTabs)
 
-    $providerButtons = @{}
-    $providerCards = @{}
-    $providerNameLabels = @{}
-    $providerStatusLabels = @{}
-    $providerModelLabels = @{}
-    $providerKeyLabels = @{}
-    $providerSoft = @{
-        official = [Drawing.Color]::FromArgb(240, 253, 250)
-        honknet = [Drawing.Color]::FromArgb(239, 246, 255)
-        deepseek = [Drawing.Color]::FromArgb(250, 245, 255)
-    }
+    $officialRouteName = New-Object Windows.Forms.Label
+    $officialRouteName.Font = New-Object Drawing.Font('Microsoft YaHei UI', 13, [Drawing.FontStyle]::Bold)
+    $officialRouteName.Location = [Drawing.Point]::new(28, 22)
+    $officialRouteName.Size = [Drawing.Size]::new(300, 30)
+    $officialPage.Controls.Add($officialRouteName)
+    $officialRouteModel = New-Object Windows.Forms.Label
+    $officialRouteModel.Location = [Drawing.Point]::new(28, 62)
+    $officialRouteModel.Size = [Drawing.Size]::new(520, 24)
+    $officialRouteModel.ForeColor = $theme.Muted
+    $officialPage.Controls.Add($officialRouteModel)
+    $officialRouteStatus = New-Object Windows.Forms.Label
+    $officialRouteStatus.Location = [Drawing.Point]::new(28, 94)
+    $officialRouteStatus.Size = [Drawing.Size]::new(520, 24)
+    $officialPage.Controls.Add($officialRouteStatus)
+    $officialSwitchButton = New-Object Windows.Forms.Button
+    $officialSwitchButton.Location = [Drawing.Point]::new(650, 55)
+    $officialSwitchButton.Size = [Drawing.Size]::new(204, 40)
+    & $styleButton $officialSwitchButton $false
+    $officialPage.Controls.Add($officialSwitchButton)
 
-    foreach ($spec in $buttonSpecs) {
-        $card = & $newCard (New-Object Drawing.Point($spec.X, 246)) (New-Object Drawing.Size(288, 148))
-        $card.Inner.BackColor = $providerSoft[$spec.Provider]
-        $stripe = New-Object Windows.Forms.Panel
-        $stripe.Location = New-Object Drawing.Point(0, 0)
-        $stripe.Size = New-Object Drawing.Size(286, 3)
-        $stripe.BackColor = $spec.Color
-        $card.Inner.Controls.Add($stripe)
-
-        $name = New-Object Windows.Forms.Label
-        $name.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
-        $name.AutoSize = $true
-        $name.Location = New-Object Drawing.Point(16, 14)
-        $card.Inner.Controls.Add($name)
-
-        $providerStatus = New-Object Windows.Forms.Label
-        $providerStatus.Size = New-Object Drawing.Size(120, 22)
-        $providerStatus.Location = New-Object Drawing.Point(150, 15)
-        $providerStatus.TextAlign = [Drawing.ContentAlignment]::MiddleRight
-        $card.Inner.Controls.Add($providerStatus)
-
-        $model = New-Object Windows.Forms.Label
-        $model.Size = New-Object Drawing.Size(254, 20)
-        $model.Location = New-Object Drawing.Point(16, 47)
-        $model.ForeColor = $theme.Muted
-        $model.AutoEllipsis = $true
-        $card.Inner.Controls.Add($model)
-
-        $key = New-Object Windows.Forms.Label
-        $key.Size = New-Object Drawing.Size(254, 20)
-        $key.Location = New-Object Drawing.Point(16, 70)
-        $key.ForeColor = $theme.Muted
-        $card.Inner.Controls.Add($key)
-
-        $button = New-Object Windows.Forms.Button
-        $button.Tag = $spec.Provider
-        $button.Size = New-Object Drawing.Size(254, 32)
-        $button.Location = New-Object Drawing.Point(16, 102)
-        & $styleButton $button $false
-        $button.FlatAppearance.BorderColor = $spec.Color
-        $card.Inner.Controls.Add($button)
-
-        $providerButtons[$spec.Provider] = $button
-        $providerCards[$spec.Provider] = $card
-        $providerNameLabels[$spec.Provider] = $name
-        $providerStatusLabels[$spec.Provider] = $providerStatus
-        $providerModelLabels[$spec.Provider] = $model
-        $providerKeyLabels[$spec.Provider] = $key
-    }
+    $customRouteHint = New-Object Windows.Forms.Label
+    $customRouteHint.Location = [Drawing.Point]::new(20, 10)
+    $customRouteHint.Size = [Drawing.Size]::new(620, 20)
+    $customRouteHint.ForeColor = $theme.Muted
+    $customPage.Controls.Add($customRouteHint)
+    $customRouteList = New-Object Windows.Forms.ListView
+    $customRouteList.Location = [Drawing.Point]::new(20, 34)
+    $customRouteList.Size = [Drawing.Size]::new(654, 144)
+    $customRouteList.View = [Windows.Forms.View]::Details
+    $customRouteList.FullRowSelect = $true
+    $customRouteList.GridLines = $false
+    $customRouteList.HideSelection = $false
+    $customRouteList.MultiSelect = $false
+    $customRouteList.BorderStyle = [Windows.Forms.BorderStyle]::FixedSingle
+    $customRouteList.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9)
+    $customRouteList.BackColor = $theme.Surface
+    [void]$customRouteList.Columns.Add('Endpoint', 210)
+    [void]$customRouteList.Columns.Add('Model', 245)
+    [void]$customRouteList.Columns.Add('Status', 160)
+    $customPage.Controls.Add($customRouteList)
+    $manageCustomButton = New-Object Windows.Forms.Button
+    $manageCustomButton.Location = [Drawing.Point]::new(696, 44)
+    $manageCustomButton.Size = [Drawing.Size]::new(200, 40)
+    & $styleButton $manageCustomButton $false
+    $customPage.Controls.Add($manageCustomButton)
+    $switchCustomButton = New-Object Windows.Forms.Button
+    $switchCustomButton.Location = [Drawing.Point]::new(696, 102)
+    $switchCustomButton.Size = [Drawing.Size]::new(200, 42)
+    & $styleButton $switchCustomButton $true
+    $customPage.Controls.Add($switchCustomButton)
 
     $usageSection = New-Object Windows.Forms.Label
     $usageSection.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9, [Drawing.FontStyle]::Bold)
     $usageSection.ForeColor = $theme.Muted
     $usageSection.AutoSize = $true
-    $usageSection.Location = New-Object Drawing.Point(32, 414)
+    $usageSection.Location = [Drawing.Point]::new(32, 492)
     $form.Controls.Add($usageSection)
 
-    $officialUsageCard = & $newCard (New-Object Drawing.Point(32, 438)) (New-Object Drawing.Size(288, 224))
-    $honkaiUsageCard = & $newCard (New-Object Drawing.Point(336, 438)) (New-Object Drawing.Size(288, 224))
-    $deepseekUsageCard = & $newCard (New-Object Drawing.Point(640, 438)) (New-Object Drawing.Size(288, 224))
+    $officialUsageCard = & $newCard ([Drawing.Point]::new(32, 516)) ([Drawing.Size]::new(296, 190))
+    $honkaiUsageCard = & $newCard ([Drawing.Point]::new(352, 516)) ([Drawing.Size]::new(296, 190))
+    $deepseekUsageCard = & $newCard ([Drawing.Point]::new(672, 516)) ([Drawing.Size]::new(296, 190))
 
     $quotaTitle = New-Object Windows.Forms.Label
     $quotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
     $quotaTitle.AutoSize = $true
-    $quotaTitle.Location = New-Object Drawing.Point(16, 16)
+    $quotaTitle.Location = [Drawing.Point]::new(18, 14)
     $officialUsageCard.Inner.Controls.Add($quotaTitle)
 
     $quotaPercent = New-Object Windows.Forms.Label
-    $quotaPercent.Size = New-Object Drawing.Size(254, 28)
-    $quotaPercent.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
-    $quotaPercent.Location = New-Object Drawing.Point(16, 50)
+    $quotaPercent.Size = [Drawing.Size]::new(250, 26)
+    $quotaPercent.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
+    $quotaPercent.Location = [Drawing.Point]::new(18, 44)
     $officialUsageCard.Inner.Controls.Add($quotaPercent)
 
     $quotaTrack = New-Object Windows.Forms.Panel
-    $quotaTrack.Size = New-Object Drawing.Size(254, 8)
-    $quotaTrack.Location = New-Object Drawing.Point(16, 84)
+    $quotaTrack.Size = [Drawing.Size]::new(250, 7)
+    $quotaTrack.Location = [Drawing.Point]::new(18, 77)
     $quotaTrack.BackColor = $theme.Track
     $officialUsageCard.Inner.Controls.Add($quotaTrack)
 
     $quotaFill = New-Object Windows.Forms.Panel
-    $quotaFill.Size = New-Object Drawing.Size(1, 8)
-    $quotaFill.Location = New-Object Drawing.Point(0, 0)
+    $quotaFill.Size = [Drawing.Size]::new(1, 7)
+    $quotaFill.Location = [Drawing.Point]::new(0, 0)
     $quotaFill.BackColor = [Drawing.Color]::FromArgb(156, 163, 175)
     $quotaTrack.Controls.Add($quotaFill)
 
     $quotaReset = New-Object Windows.Forms.Label
-    $quotaReset.Size = New-Object Drawing.Size(254, 22)
-    $quotaReset.Location = New-Object Drawing.Point(16, 106)
+    $quotaReset.Size = [Drawing.Size]::new(250, 20)
+    $quotaReset.Location = [Drawing.Point]::new(18, 92)
     $quotaReset.ForeColor = $theme.Muted
     $officialUsageCard.Inner.Controls.Add($quotaReset)
 
     $quotaStatus = New-Object Windows.Forms.Label
-    $quotaStatus.Size = New-Object Drawing.Size(254, 62)
-    $quotaStatus.Location = New-Object Drawing.Point(16, 142)
+    $quotaStatus.Size = [Drawing.Size]::new(250, 48)
+    $quotaStatus.Location = [Drawing.Point]::new(18, 123)
     $quotaStatus.ForeColor = $theme.Muted
     $officialUsageCard.Inner.Controls.Add($quotaStatus)
 
     $honkaiQuotaTitle = New-Object Windows.Forms.Label
     $honkaiQuotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
     $honkaiQuotaTitle.AutoSize = $true
-    $honkaiQuotaTitle.Location = New-Object Drawing.Point(16, 16)
+    $honkaiQuotaTitle.Location = [Drawing.Point]::new(18, 14)
     $honkaiUsageCard.Inner.Controls.Add($honkaiQuotaTitle)
 
     $honkaiBalance = New-Object Windows.Forms.Label
-    $honkaiBalance.Size = New-Object Drawing.Size(254, 28)
-    $honkaiBalance.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
-    $honkaiBalance.Location = New-Object Drawing.Point(16, 50)
+    $honkaiBalance.Size = [Drawing.Size]::new(250, 26)
+    $honkaiBalance.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
+    $honkaiBalance.Location = [Drawing.Point]::new(18, 44)
     $honkaiUsageCard.Inner.Controls.Add($honkaiBalance)
 
     $honkaiBreakdown = New-Object Windows.Forms.Label
-    $honkaiBreakdown.Size = New-Object Drawing.Size(254, 54)
-    $honkaiBreakdown.Location = New-Object Drawing.Point(16, 88)
+    $honkaiBreakdown.Size = [Drawing.Size]::new(250, 42)
+    $honkaiBreakdown.Location = [Drawing.Point]::new(18, 78)
     $honkaiBreakdown.ForeColor = $theme.Muted
     $honkaiUsageCard.Inner.Controls.Add($honkaiBreakdown)
 
     $honkaiStatus = New-Object Windows.Forms.Label
-    $honkaiStatus.Size = New-Object Drawing.Size(254, 58)
-    $honkaiStatus.Location = New-Object Drawing.Point(16, 146)
+    $honkaiStatus.Size = [Drawing.Size]::new(250, 48)
+    $honkaiStatus.Location = [Drawing.Point]::new(18, 128)
     $honkaiStatus.ForeColor = $theme.Muted
     $honkaiUsageCard.Inner.Controls.Add($honkaiStatus)
 
     $deepseekQuotaTitle = New-Object Windows.Forms.Label
     $deepseekQuotaTitle.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
     $deepseekQuotaTitle.AutoSize = $true
-    $deepseekQuotaTitle.Location = New-Object Drawing.Point(16, 16)
+    $deepseekQuotaTitle.Location = [Drawing.Point]::new(18, 14)
     $deepseekUsageCard.Inner.Controls.Add($deepseekQuotaTitle)
 
     $deepseekBalance = New-Object Windows.Forms.Label
-    $deepseekBalance.Size = New-Object Drawing.Size(254, 28)
-    $deepseekBalance.Font = New-Object Drawing.Font('Microsoft YaHei UI', 12, [Drawing.FontStyle]::Bold)
-    $deepseekBalance.Location = New-Object Drawing.Point(16, 50)
+    $deepseekBalance.Size = [Drawing.Size]::new(250, 26)
+    $deepseekBalance.Font = New-Object Drawing.Font('Microsoft YaHei UI', 11, [Drawing.FontStyle]::Bold)
+    $deepseekBalance.Location = [Drawing.Point]::new(18, 44)
     $deepseekUsageCard.Inner.Controls.Add($deepseekBalance)
 
     $deepseekBreakdown = New-Object Windows.Forms.Label
-    $deepseekBreakdown.Size = New-Object Drawing.Size(254, 38)
-    $deepseekBreakdown.Location = New-Object Drawing.Point(16, 88)
+    $deepseekBreakdown.Size = [Drawing.Size]::new(250, 34)
+    $deepseekBreakdown.Location = [Drawing.Point]::new(18, 78)
     $deepseekBreakdown.ForeColor = $theme.Muted
     $deepseekUsageCard.Inner.Controls.Add($deepseekBreakdown)
 
     $deepseekStatus = New-Object Windows.Forms.Label
-    $deepseekStatus.Size = New-Object Drawing.Size(254, 70)
-    $deepseekStatus.Location = New-Object Drawing.Point(16, 134)
+    $deepseekStatus.Size = [Drawing.Size]::new(250, 52)
+    $deepseekStatus.Location = [Drawing.Point]::new(18, 122)
     $deepseekStatus.ForeColor = $theme.Muted
     $deepseekUsageCard.Inner.Controls.Add($deepseekStatus)
 
     $privacy = New-Object Windows.Forms.Label
     $privacy.ForeColor = $theme.Muted
-    $privacy.Size = New-Object Drawing.Size(896, 28)
-    $privacy.Location = New-Object Drawing.Point(32, 682)
+    $privacy.Size = [Drawing.Size]::new(936, 28)
+    $privacy.Location = [Drawing.Point]::new(32, 728)
     $privacy.TextAlign = [Drawing.ContentAlignment]::MiddleLeft
     $form.Controls.Add($privacy)
 
@@ -837,73 +968,64 @@ function Show-Switcher {
 
     $refresh = {
         $state = Get-CurrentState
+        $definitions = Get-AllProviderDefinitions
         $status.Text = ((& $text 'CurrentProvider') -f (& $getProviderDisplay $state))
         $currentModel.Text = ((& $text 'CurrentModel') -f $state.Model)
         $currentModel.ForeColor = $theme.Success
         $authPath = Join-Path (Split-Path -Parent $ConfigPath) 'auth.json'
         $officialReady = Test-Path -LiteralPath $authPath
-        $honkReady = (Get-KeyPresent 'HONKNET_API_KEY') -or (Get-KeyPresent 'HONKAI_API_KEY')
-        $dsReady = Get-KeyPresent ([string]$definitions.deepseek.env_key)
-        $catalogReady = Test-Catalog $definitions.deepseek
-        $providerReady = @{
-            official = $officialReady
-            honknet = $honkReady
-            deepseek = ($dsReady -and $catalogReady)
+        $officialRouteName.Text = & $text 'OfficialButton'
+        $officialRouteModel.Text = ((& $text 'ModelLabel') -f [string]$definitions['official'].model)
+        $officialRouteStatus.Text = if ($officialReady) { & $text 'OfficialAuthReady' } else { & $text 'OfficialAuthMissing' }
+        $officialRouteStatus.ForeColor = if ($officialReady) { $theme.Success } else { $theme.Warning }
+        $officialSwitchButton.Text = if ($state.Provider -eq 'openai') { & $text 'ActiveRoute' } else { & $text 'SwitchRoute' }
+        $officialSwitchButton.Enabled = $state.Provider -ne 'openai'
+        $customRouteList.BeginUpdate()
+        $customRouteList.Items.Clear()
+        $activeListItem = $null
+        $routeCount = 0
+        $configuredKeyCount = 0
+        $catalogReady = $true
+        foreach ($provider in $definitions.Keys) {
+            if ($provider -eq 'official') { continue }
+            $definition = $definitions[$provider]
+            $routeCount++
+            $isActive = ([string]$state.Provider -eq [string]$definition.provider_id)
+            $keyReady = Get-KeyPresent ([string]$definition.env_key)
+            $modelReady = Test-Catalog $definition
+            if ($keyReady) { $configuredKeyCount++ }
+            if ($provider -eq 'deepseek' -and -not $modelReady) { $catalogReady = $false }
+            $routeStatus = if ($isActive) { & $text 'ActiveRoute' } elseif ($keyReady -and $modelReady) { & $text 'Healthy' } else { & $text 'Attention' }
+            $row = New-Object Windows.Forms.ListViewItem([string]$definition.display_name)
+            [void]$row.SubItems.Add([string]$definition.model)
+            [void]$row.SubItems.Add($routeStatus)
+            $row.Tag = [string]$provider
+            if ($isActive) {
+                $row.BackColor = $theme.PrimarySoft
+                $row.ForeColor = $theme.Primary
+                $activeListItem = $row
+            }
+            elseif (-not $keyReady -or -not $modelReady) { $row.ForeColor = $theme.Warning }
+            [void]$customRouteList.Items.Add($row)
         }
-        $activeProvider = switch ([string]$state.Provider) {
-            'openai' { 'official' }
-            'honknet' { 'honknet' }
-            'deepseek' { 'deepseek' }
-            'custom' { if ([string]$state.Display -match 'legacy') { 'honknet' } else { 'unknown' } }
-            default { 'unknown' }
+        if ($null -ne $activeListItem) { $activeListItem.Selected = $true; $activeListItem.Focused = $true }
+        $customRouteList.EndUpdate()
+        $switchCustomButton.Enabled = ($customRouteList.SelectedItems.Count -gt 0 -and [string]$customRouteList.SelectedItems[0].Tag -ne [string]$state.Provider)
+        $routeTabs.SelectedTab = if ($state.Provider -eq 'openai') { $officialPage } else { $customPage }
+        $activeReady = if ($state.Provider -eq 'openai') { $officialReady } else { $false }
+        foreach ($item in $customRouteList.Items) {
+            if ([string]$item.Tag -eq [string]$state.Provider) {
+                $activeDefinition = $definitions[[string]$item.Tag]
+                $activeReady = (Get-KeyPresent ([string]$activeDefinition.env_key)) -and (Test-Catalog $activeDefinition)
+                break
+            }
         }
-
-        foreach ($provider in @('official', 'honknet', 'deepseek')) {
-            $isActive = $provider -eq $activeProvider
-            $isReady = [bool]$providerReady[$provider]
-            $providerCards[$provider].Outer.BackColor = if ($isActive) { $theme.Primary } else { $theme.Border }
-            $providerStatusLabels[$provider].Text = if ($isActive) {
-                '● ' + (& $text 'ActiveRoute')
-            }
-            elseif ($isReady) {
-                '● ' + (& $text 'Healthy')
-            }
-            else {
-                '● ' + (& $text 'Attention')
-            }
-            $providerStatusLabels[$provider].ForeColor = if ($isActive) {
-                $theme.Primary
-            }
-            elseif ($isReady) {
-                $theme.Success
-            }
-            else {
-                $theme.Warning
-            }
-            $providerModelLabels[$provider].Text = ((& $text 'ModelLabel') -f [string]$definitions.$provider.model)
-            $providerKeyLabels[$provider].Text = if ($provider -eq 'official') {
-                if ($officialReady) { & $text 'OfficialAuthReady' } else { & $text 'OfficialAuthMissing' }
-            }
-            elseif ($isReady) {
-                & $text 'KeyReadyLabel'
-            }
-            else {
-                & $text 'KeyMissingLabel'
-            }
-            $providerKeyLabels[$provider].ForeColor = if ($isReady) { $theme.Muted } else { $theme.Warning }
-            $providerButtons[$provider].Enabled = -not $isActive
-            $providerButtons[$provider].Text = if ($isActive) { & $text 'ActiveRoute' } else { & $text 'SwitchRoute' }
-            $providerButtons[$provider].BackColor = if ($isActive) { $theme.PrimarySoft } else { $theme.Surface }
-            $providerButtons[$provider].ForeColor = if ($isActive) { $theme.Primary } else { $theme.Text }
-        }
-
-        $activeReady = if ($providerReady.ContainsKey($activeProvider)) { [bool]$providerReady[$activeProvider] } else { $false }
         $statusDot.ForeColor = if ($activeReady) { $theme.Success } else { $theme.Warning }
-        $configuredKeyCount = [int][bool]$honkReady + [int][bool]$dsReady
         $health.Text = ((& $text 'HealthSummary') -f `
             $configuredKeyCount, `
+            $routeCount, `
             $(if ($catalogReady) { & $text 'CatalogReady' } else { & $text 'CatalogMissing' }))
-        $health.ForeColor = if ($honkReady -and $dsReady -and $catalogReady) { $theme.Success } else { $theme.Muted }
+        $health.ForeColor = if ($catalogReady) { $theme.Success } else { $theme.Muted }
     }
 
     $renderQuota = {
@@ -1400,14 +1522,12 @@ function Show-Switcher {
     $honkaiAutoTimer.Add_Tick({ & $startHonkaiRefresh })
     $refreshQuotaButton.Add_Click({ & $startQuotaRefresh; & $startHonkaiRefresh; & $startDeepSeekRefresh })
 
-    foreach ($providerButton in $providerButtons.Values) {
-        $providerButton.Add_Click({
-            $provider = [string]$this.Tag
-            $providerLabel = switch ($provider) {
-                'official' { & $text 'OfficialButton' }
-                'honknet' { & $text 'HonknetButton' }
-                'deepseek' { & $text 'DeepSeekButton' }
-            }
+    $invokeSwitch = {
+        param([string]$Provider)
+        $definition = (Get-AllProviderDefinitions)[$Provider]
+        if ($null -eq $definition) { return }
+        $providerLabel = [string]$definition.display_name
+        if ($Provider -eq 'official') { $providerLabel = & $text 'OfficialButton' }
             $answer = [Windows.Forms.MessageBox]::Show(
                 ((& $text 'ConfirmMessage') -f $providerLabel),
                 (& $text 'ConfirmTitle'),
@@ -1416,7 +1536,7 @@ function Show-Switcher {
             )
             if ($answer -ne [Windows.Forms.DialogResult]::OK) { return }
             try {
-                if (Set-CodexProvider $provider $false) {
+                if (Set-CodexProvider $Provider $false) {
                     & $refresh
                     & $renderQuota
                     & $renderDeepSeek
@@ -1447,8 +1567,18 @@ function Show-Switcher {
                     [Windows.Forms.MessageBoxIcon]::Error
                 ) | Out-Null
             }
-        })
     }
+
+    $officialSwitchButton.Add_Click({ & $invokeSwitch 'official' })
+    $switchCustomButton.Add_Click({
+        if ($customRouteList.SelectedItems.Count -eq 1) {
+            & $invokeSwitch ([string]$customRouteList.SelectedItems[0].Tag)
+        }
+    })
+    $customRouteList.Add_SelectedIndexChanged({
+        $state = Get-CurrentState
+        $switchCustomButton.Enabled = ($customRouteList.SelectedItems.Count -eq 1 -and [string]$customRouteList.SelectedItems[0].Tag -ne [string]$state.Provider)
+    })
 
     $updateLanguage = {
         $form.Text = & $text 'FormTitle'
@@ -1458,12 +1588,17 @@ function Show-Switcher {
         $languageButton.Text = & $text 'LanguageButton'
         $routeSection.Text = & $text 'RouteOverview'
         $providerSection.Text = & $text 'ProviderRoutes'
+        $officialPage.Text = & $text 'OfficialCategory'
+        $customPage.Text = & $text 'CustomCategory'
+        $customRouteHint.Text = & $text 'CustomRouteHint'
+        $manageCustomButton.Text = & $text 'AddCustomRoute'
+        $switchCustomButton.Text = & $text 'SwitchSelectedRoute'
+        $customRouteList.Columns[0].Text = & $text 'RouteNameColumn'
+        $customRouteList.Columns[1].Text = & $text 'RouteModelColumn'
+        $customRouteList.Columns[2].Text = & $text 'RouteStatusColumn'
         $usageSection.Text = & $text 'UsageOverview'
         $syncStatus.Text = ((& $text 'LastSync') -f $QuotaRefreshSeconds)
         $hint.Text = & $text 'Hint'
-        $providerNameLabels['official'].Text = & $text 'OfficialButton'
-        $providerNameLabels['honknet'].Text = & $text 'HonknetButton'
-        $providerNameLabels['deepseek'].Text = & $text 'DeepSeekButton'
         $quotaTitle.Text = & $text 'QuotaTitle'
         $honkaiQuotaTitle.Text = & $text 'HonkaiQuotaTitle'
         $deepseekQuotaTitle.Text = & $text 'DeepSeekQuotaTitle'
@@ -1473,6 +1608,8 @@ function Show-Switcher {
         & $renderDeepSeek
         & $renderHonkai
     }
+
+    $manageCustomButton.Add_Click({ if (Show-CustomProviderDialog) { & $refresh } })
 
     $languageButton.Add_Click({
         $uiState.Language = if ($uiState.Language -eq 'zh-CN') { 'en' } else { 'zh-CN' }

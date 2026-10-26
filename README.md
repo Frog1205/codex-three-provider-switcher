@@ -1,12 +1,13 @@
-# Codex Three-Provider Switcher
+# Codex API 路由管理器
 
-一个面向 Windows 和 macOS Apple Silicon Codex Desktop 的三线路 Token · Model 切换器，可在以下 provider 之间切换：
+一个面向 Windows 和 macOS Apple Silicon Codex Desktop 的 Token · Model 路由切换器。Windows 界面按两类入口组织：官方 OpenAI 与自定义接口；自定义接口内置 Honknet、DeepSeek、OpenDev，并支持继续添加其他兼容接口。
 
-| 按钮 | Provider | 默认模型 | 凭据来源 |
+| 类别 | Provider | 默认模型 | 凭据来源 |
 | --- | --- | --- | --- |
-| GPT Official | OpenAI 官方账号 | `gpt-5.6-sol` | Codex 已登录的 OpenAI/ChatGPT 账号 |
-| Honknet | Honknet Responses API | `gpt-5.6-sol` | `HONKNET_API_KEY` 用户环境变量 |
-| DeepSeek | DeepSeek Responses API | `deepseek-v4-flash` | `DEEPSEEK_API_KEY` 用户环境变量 |
+| 官方 OpenAI | OpenAI 官方账号 | `gpt-5.6-sol` | Codex 已登录的 OpenAI/ChatGPT 账号 |
+| 自定义接口 | Honknet | `gpt-5.6-sol` | `HONKNET_API_KEY` 用户环境变量 |
+| 自定义接口 | DeepSeek | `deepseek-v4-flash` | `DEEPSEEK_API_KEY` 用户环境变量 |
+| 自定义接口 | OpenDev | `gpt-6.1-sol` | `OPENDEV_KEY` 用户环境变量 |
 
 > 这是非官方社区工具。它不会提供、共享或代购任何 API Key，也不会绕过供应商的账号、额度或使用限制。
 
@@ -27,16 +28,18 @@
 
 请只从本项目 GitHub Releases 下载：
 
-- [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-Setup-x64-V_1.3_260829.02.exe)：自动安装并创建桌面和开始菜单快捷方式。
-- [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-Portable-x64-V_1.3_260829.02.zip)：解压后双击启动，不写入安装目录或卸载信息。
-- [下载 macOS Apple Silicon 版 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：支持 M1/M2/M3/M4/M5 及后续 Apple Silicon，Intel Mac 不支持。
+- [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.0/Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261025.01.exe)：自动安装并创建桌面和开始菜单快捷方式。
+- [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.0/Codex-Three-Provider-Switcher-Portable-x64-V_1.4_261025.01.zip)：解压后双击启动，不写入安装目录或卸载信息。
+- [下载 macOS Apple Silicon 历史稳定版 v1.3 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：支持 M1/M2/M3/M4/M5 及后续 Apple Silicon，Intel Mac 不支持。
 - [查看最新版本与更新说明](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest)
+
+Windows 当前版本为 **v1.4.0 / V_1.4_261025.01**。macOS 仍提供 v1.3 稳定版，本次 Windows 的自定义接口管理功能尚未移植到 macOS。
 
 ### EXE 安装版
 
-1. 下载 `Codex-Three-Provider-Switcher-Setup-x64-V_1.3_260829.02.exe`。
+1. 下载 `Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261025.01.exe`。
 2. 双击安装，不需要管理员权限。
-3. 安装完成后，双击桌面的“Codex 三线路切换器”。
+3. 安装完成后，双击桌面的“Codex API 路由管理器”。
 4. 只使用 GPT 官方线路时无需配置第三方 Key。
 5. 使用 Honknet 或 DeepSeek 时，从开始菜单打开“配置 Honknet 和 DeepSeek 密钥”，按提示进行隐藏输入。
 
@@ -62,11 +65,19 @@ macOS GUI 同样显示 Official Codex、Honknet、DeepSeek 三路额度卡片；
 
 macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` 文件时，如果系统阻止打开，请在“系统设置 → 隐私与安全性”中允许，并确认使用的是 Apple Silicon Mac。
 
-## 👤 普通用户：界面预览（v1.3）
+## 👤 普通用户：界面预览（Windows v1.4）
 
-![Codex 三线路切换器 V_1.3_260829.02 界面](docs/ui-preview-v1.3.png)
+![Codex API 路由管理器 v1.4 离线测试界面](docs/ui-preview-v1.4.png)
 
-当前推荐版本为 `V_1.3_260829.02`：使用 Token · Model 路由管理器布局，当前实际模型以绿色状态高亮，GPT Official、Honknet、DeepSeek 使用青绿、蓝、紫的差异化卡片配色。面板默认显示中文；点击右上角的 `English` 可即时切换英文。截图中的“已配置”只表示对应配置在本机可用，不包含或展示任何真实 Key。
+![自定义接口编辑窗口](docs/custom-editor-v1.4.png)
+
+以上为离线测试界面，模型与额度为测试占位信息，不代表服务商在线连通性。
+
+### 历史界面（v1.3）
+
+![Codex Provider Switcher V_1.3_260829.02 历史界面](docs/ui-preview-v1.3.png)
+
+`V_1.3_260829.02` 截图仅作历史参考。当前 Windows 版 `V_1.4_261025.01` 已更名为“Codex API 路由管理器”，界面按“官方 OpenAI / 自定义接口”两类入口组织；自定义接口包含 Honknet、DeepSeek、OpenDev 和用户添加的线路。
 
 不同版本的 GUI 外观和变化请查看 [GUI 版本对照](docs/GUI-VERSIONS.md)。
 
@@ -219,7 +230,7 @@ DeepSeek key is not configured. Configure or replace it now? [y/N]
 桌面会出现：
 
 ```text
-Codex Three-Provider Switcher
+Codex API Route Manager
 ```
 
 ### 第五步：重启并首次切换
@@ -227,7 +238,7 @@ Codex Three-Provider Switcher
 1. 完全退出 Codex Desktop。
 2. 重新打开 Codex Desktop一次，使新环境变量进入客户端进程。
 3. 保存当前任务中的未提交内容。
-4. 双击桌面的 `Codex Three-Provider Switcher`。
+4. 双击桌面的 `Codex API 路由管理器`。
 5. 点击所需线路。
 6. 等待 Codex Desktop 重启。
 7. 在客户端中创建一个新任务进行验证。
@@ -569,7 +580,7 @@ DeepSeek 官方公开接口只返回余额；详细用量报表仍以 [usage](ht
 
 ## 👤 普通用户：卸载
 
-使用 EXE 安装版时，在 Windows“设置 > 应用 > 已安装的应用”中卸载 `Codex Three-Provider Switcher`，或使用开始菜单中的卸载入口。卸载程序文件时会保留 Codex 配置、线路备份和环境变量中的 Key。
+使用 EXE 安装版时，在 Windows“设置 > 应用 > 已安装的应用”中卸载 `Codex API Route Manager`，或使用开始菜单中的卸载入口。卸载程序文件时会保留 Codex 配置、线路备份和环境变量中的 Key。
 
 使用 macOS 版时，删除解压出的项目目录即可。它不会写入系统安装目录；`~/.codex/config.toml`、`~/.codex/provider-switch-backups/` 和 shell 环境变量中的 Key 会保留。
 
@@ -651,7 +662,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Releas
 如需保留历史产物并生成带版本标识的新安装包，可追加 `-ArtifactSuffix`，例如：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.3.0 -ArtifactSuffix V_1.3_260829.02
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.4.0 -ArtifactSuffix V_1.4_261025.01
 ```
 
 这会生成带后缀的 EXE 和 ZIP，不覆盖默认文件名的旧版本产物。
@@ -663,3 +674,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Releas
 ## 许可证
 
 [MIT](LICENSE)
+
+## 自定义第三方 API 线路
+
+“自定义接口”页中的“管理 / 添加接口”可以查看已保存线路、新增或编辑线路，支持输入：线路名称、唯一 ID、Base URL、模型名、环境变量名、API Key 和协议（`responses` 或 `chat_completions`）。先点“测试连接”，成功后“保存配置”才可用；测试请求分别调用 `/responses` 或 `/chat/completions`，失败不会保存。保存和切换是两个独立操作：
+
+- 把 Key 写入当前 Windows 用户环境变量；Key 不写入仓库、`config.toml` 或自定义线路注册表。
+- 把线路定义保存到 `%APPDATA%\CodexThreeProviderSwitcher\custom-providers.json`，其中只保存变量名和路由参数。
+- 保存配置不会改变当前路由。选择已保存线路并成功测试后，才可单独点击“切换线路”；切换复用现有的 `config.toml` 原子写入、切换前备份和 Codex 重启流程。
+
+第三方服务必须真正兼容 Codex 所选协议、模型名和工具调用能力。`chat_completions` 仅适用于服务端明确支持的兼容层；如果服务只提供普通聊天接口，不能据此推断可运行 Codex agent/tool loop。保存后需要完全退出并重新打开 Codex，再新建任务验证线路。

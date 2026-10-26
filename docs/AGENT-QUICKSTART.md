@@ -4,7 +4,7 @@
 
 ## 先读什么
 
-1. `src/providers.json`：三条线路的唯一 Provider/模型定义来源。
+1. `src/providers.json`：内置线路的 Provider/模型定义来源；Windows 自定义线路位于当前用户 APPDATA 下的注册表文件。
 2. `src/CodexProviderSwitcher.ps1`：Windows GUI、路由切换、额度卡片和语言文案。
 3. `macos/TokenModelSwitch.py`：macOS Apple Silicon GUI、路由切换和三路额度查询。
 4. `tests/Test-Switcher.ps1`、`tests/Test-Packages.ps1`、`tests/Test-MSIXPackaging.ps1`：Windows 回归与打包检查。
@@ -14,7 +14,7 @@
 
 - 只修改 `~/.codex/config.toml`（Windows 为 `%USERPROFILE%\\.codex\\config.toml`）的顶层路由字段，并在切换前备份。
 - 不读取、打印、提交或写入真实 API Key；第三方 Key 只从环境变量读取。
-- Provider 标识：`openai`、`honknet`、`deepseek`；默认模型见 `src/providers.json`。
+- Provider 标识：`openai`、`honknet`、`deepseek`、`opendev`；Windows 还支持用户自定义 ID；默认模型见 `src/providers.json`。
 - 三路额度读取失败必须降级为 `Unavailable`，不能阻断路由切换或冻结 GUI。
 - macOS 仅支持 Apple Silicon（arm64/M 系列）；Intel Mac 必须明确拒绝启动。
 - 用户切换后必须重启 Codex Desktop 并创建新任务，不能声称已自动切换当前会话。
@@ -25,6 +25,8 @@
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Switcher.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-CustomProviders.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -STA -File .\tests\Test-GuiSmoke.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-Packages.ps1
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-MSIXPackaging.ps1
 ```

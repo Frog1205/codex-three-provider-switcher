@@ -36,5 +36,20 @@
     "stream_max_retries": 3,
     "stream_idle_timeout_ms": 300000,
     "catalog_file": "deepseek-model-catalog.json"
+  },
+  "opendev": {
+    "display_name": "OpenDev",
+    "provider_id": "opendev",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "medium",
+    "disable_response_storage": true,
+    "name": "opendev",
+    "base_url": "https://api.openai-next.com/v1",
+    "env_key": "OPENDEV_KEY",
+    "wire_api": "responses",
+    "requires_openai_auth": false,
+    "request_max_retries": 3,
+    "stream_max_retries": 3,
+    "stream_idle_timeout_ms": 300000
   }
 }

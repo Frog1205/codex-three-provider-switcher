@@ -27,7 +27,7 @@ internal static class CodexSwitcherLauncher
         {
             MessageBox.Show(
                 "The application package is incomplete. Missing: " + scriptName,
-                "Codex Three-Provider Switcher",
+                "Codex API Route Manager",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             return 2;
@@ -56,7 +56,7 @@ internal static class CodexSwitcherLauncher
         {
             MessageBox.Show(
                 "Unable to start the application.\r\n\r\n" + exception.Message,
-                "Codex Three-Provider Switcher",
+                "Codex API Route Manager",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
             return 1;

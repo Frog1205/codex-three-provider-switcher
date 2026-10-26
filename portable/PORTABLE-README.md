@@ -3,7 +3,7 @@
 适用于 Windows 10/11 64 位电脑，不需要安装。
 
 1. 必须先完整解压 ZIP，不能直接在压缩包内运行。
-2. 双击 `Start-Codex-Switcher.cmd` 打开切换器。
+2. 双击 `Start-Codex-Switcher.cmd` 打开“Codex API 路由管理器”。
 3. 只使用 GPT 官方线路时，不需要配置第三方密钥。
 4. 使用 Honknet 或 DeepSeek 前，双击 `Configure-Provider-Keys.cmd`，按提示输入对应密钥。
 5. 配置密钥后，完全退出并重新打开 Codex Desktop。

@@ -1,5 +1,6 @@
-param(
+﻿param(
     [string]$ArtifactsDir,
+    [string]$ArtifactSuffix = '',
     [switch]$Integration
 )
 
@@ -41,8 +42,9 @@ foreach ($file in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', '
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
-    $setup = Join-Path $ArtifactsDir 'Codex-Three-Provider-Switcher-Setup-x64.exe'
-    $zip = Join-Path $ArtifactsDir 'Codex-Three-Provider-Switcher-Portable-x64.zip'
+    $tag = if ($ArtifactSuffix) { '-' + $ArtifactSuffix } else { '' }
+    $setup = Join-Path $ArtifactsDir ('Codex-Three-Provider-Switcher-Setup-x64' + $tag + '.exe')
+    $zip = Join-Path $ArtifactsDir ('Codex-Three-Provider-Switcher-Portable-x64' + $tag + '.zip')
     foreach ($artifact in @($setup, $zip)) {
         if (-not (Test-Path -LiteralPath $artifact)) { throw "Release artifact is missing: $artifact" }
         if ((Get-Item -LiteralPath $artifact).Length -lt 1024) { throw "Release artifact is unexpectedly small: $artifact" }
@@ -50,7 +52,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
     $header = [IO.File]::ReadAllBytes($setup)
     if ($header[0] -ne 0x4D -or $header[1] -ne 0x5A) { throw 'Installer is not a Windows executable.' }
     $zipEntries = @(tar -tf $zip)
-    foreach ($expected in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'src/CodexProviderSwitcher.ps1', 'src/Get-DeepSeekBalance.ps1', 'src/Get-HonkaiUsage.ps1', 'src/ConfigureProviderKeys.ps1')) {
+    foreach ($expected in @('Start-Codex-Switcher.cmd', 'Configure-Provider-Keys.cmd', 'src/CodexProviderSwitcher.ps1', 'src/Get-DeepSeekBalance.ps1', 'src/Get-HonkaiUsage.ps1', 'src/ConfigureProviderKeys.ps1', 'src/assets/codex-switcher-icon.ico', 'src/providers.json', 'src/deepseek-model-catalog.json')) {
         if (-not ($zipEntries -match [regex]::Escape($expected))) { throw "Portable archive entry is missing: $expected" }
     }
 
@@ -60,6 +62,10 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
         $extractDir = Join-Path $testRoot 'portable'
         [IO.Directory]::CreateDirectory($testRoot) | Out-Null
         $configPath = Join-Path $env:USERPROFILE '.codex\config.toml'
+        if (-not (Test-Path -LiteralPath $configPath)) {
+            $configPath = Join-Path $testRoot 'config.toml'
+            [IO.File]::WriteAllText($configPath, 'model_provider = "openai"')
+        }
         $configBefore = (Get-FileHash -LiteralPath $configPath).Hash
         $honkBefore = [Environment]::GetEnvironmentVariable('HONKNET_API_KEY', 'User')
         $deepBefore = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY', 'User')
@@ -67,17 +73,23 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
         try {
             $installLog = Join-Path $testRoot 'install.log'
             $installer = Start-Process -FilePath $setup -ArgumentList @(
-                '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/TASKS=""',
+                '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/NOICONS', '/PackageTest=1', '/TASKS=""',
                 "/DIR=`"$installDir`"", "/LOG=`"$installLog`""
-            ) -PassThru -Wait
+            ) -WindowStyle Hidden -PassThru -Wait
             if ($installer.ExitCode -ne 0) { throw "Installer exit code: $($installer.ExitCode)" }
 
-            foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'Get-HonkaiUsage.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json', 'unins000.exe')) {
+            foreach ($file in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 'Get-DeepSeekBalance.ps1', 'Get-HonkaiUsage.ps1', 'ConfigureProviderKeys.ps1', 'providers.json', 'deepseek-model-catalog.json', 'assets\codex-switcher-icon.ico', 'unins000.exe')) {
                 if (-not (Test-Path -LiteralPath (Join-Path $installDir $file))) { throw "Installed file is missing: $file" }
             }
 
+            foreach ($file in @('CodexProviderSwitcher.ps1', 'providers.json', 'assets\codex-switcher-icon.ico')) {
+                $sourceHash = (Get-FileHash -LiteralPath (Join-Path $repoRoot ('src\' + $file))).Hash
+                $installedHash = (Get-FileHash -LiteralPath (Join-Path $installDir $file)).Hash
+                if ($sourceHash -ne $installedHash) { throw ('Installed/source hash mismatch: ' + $file) }
+            }
+
             $uninstaller = Start-Process -FilePath (Join-Path $installDir 'unins000.exe') `
-                -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -PassThru -Wait
+                -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -WindowStyle Hidden -PassThru -Wait
             if ($uninstaller.ExitCode -ne 0) { throw "Uninstaller exit code: $($uninstaller.ExitCode)" }
             Start-Sleep -Seconds 1
 
@@ -85,7 +97,7 @@ if (-not [string]::IsNullOrWhiteSpace($ArtifactsDir)) {
             $portableRoot = Get-ChildItem -LiteralPath $extractDir -Directory | Select-Object -First 1
             if ($null -eq $portableRoot) { throw 'Portable archive root directory was not found.' }
             $statusOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass `
-                -File (Join-Path $portableRoot.FullName 'src\CodexProviderSwitcher.ps1') -Mode status -NoRestart | Out-String
+                -File (Join-Path $portableRoot.FullName 'src\CodexProviderSwitcher.ps1') -Mode status -ConfigPath $configPath -NoRestart | Out-String
             if ($LASTEXITCODE -ne 0 -or $statusOutput -notmatch 'Provider') { throw 'Portable status check failed.' }
 
             $configAfter = (Get-FileHash -LiteralPath $configPath).Hash

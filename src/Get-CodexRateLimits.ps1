@@ -62,7 +62,7 @@ try {
         params = @{
             clientInfo = @{
                 name = 'codex_provider_switcher'
-                title = 'Codex Provider Switcher'
+                title = 'Codex API Route Manager'
                 version = '2.0.0'
             }
         }

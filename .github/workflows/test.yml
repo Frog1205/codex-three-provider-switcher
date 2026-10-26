@@ -1,0 +1,115 @@
+name: Windows and macOS regression
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-windows:
+    name: Windows PowerShell 5.1 regression and package integration
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - name: Route, registry, package, and MSIX regression
+        run: |
+          & ./tests/Test-Switcher.ps1
+          & ./tests/Test-CustomProviders.ps1
+          & ./tests/Test-GuiSmoke.ps1
+          & ./tests/Test-Packages.ps1
+          & ./tests/Test-MSIXPackaging.ps1
+      - name: Build release and test install, uninstall, and portable archive
+        run: |
+          & ./packaging/Build-Release.ps1 -Version 1.4.0 -ArtifactSuffix V_1.4_261025.01
+          & ./tests/Test-Packages.ps1 -ArtifactsDir ./dist -ArtifactSuffix V_1.4_261025.01 -Integration
+
+  test-macos-arm64:
+    name: macOS 14 (arm64) smoke + unit + GUI import
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Confirm Apple Silicon (arm64) runner
+        run: |
+          echo "Runner arch: $(uname -m)"
+          echo "sysctl hw.optional.arm64: $(sysctl -in hw.optional.arm64 2>/dev/null || echo N/A)"
+          test "$(uname -m)" = "arm64"
+
+      - name: Set up Python (python.org build, ships with _tkinter on macOS)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Show Python toolchain
+        run: |
+          python --version
+          which python
+          python -c "import sys; print('platform=', sys.platform); print('machine=', sys.platform)"
+
+      - name: Verify tkinter is importable (no GUI launch)
+        run: |
+          python -c "import tkinter; from tkinter import messagebox; print('tkinter OK, version=', tkinter.TkVersion)"
+
+      - name: Verify platform.guard would accept this host
+        run: |
+          python -c "
+          import sys, platform
+          assert sys.platform == 'darwin', f'expected darwin, got {sys.platform}'
+          machine = platform.machine().lower()
+          supported = {'arm64', 'aarch64'}
+          arm_native = machine in supported
+          if not arm_native:
+              import subprocess
+              arm_native = subprocess.check_output(['sysctl','-in','hw.optional.arm64'], stderr=subprocess.DEVNULL).strip() == b'1'
+          assert arm_native, f'arm64 not detected, machine={machine}'
+          print('apple_silicon_gate=PASS')
+          "
+
+      - name: Syntax check (py_compile)
+        run: |
+          python -m py_compile macos/TokenModelSwitch.py && echo "syntax=PASS"
+
+      - name: Static import (no GUI launch)
+        run: |
+          python -c "
+          import sys, os
+          sys.path.insert(0, os.path.join(os.getcwd(), 'macos'))
+          import TokenModelSwitch
+          print('import=PASS', 'version=', TokenModelSwitch.APP_VERSION)
+          "
+
+      - name: Run --self-test (cross-platform config logic)
+        run: |
+          python macos/TokenModelSwitch.py --self-test
+
+      - name: Run unit tests (unittest)
+        run: |
+          cd macos && python test_token_model_switch.py -v
+
+      - name: Headless GUI smoke (offscreen Tk, no display needed)
+        run: |
+          cd macos && python -c "
+          import sys, os
+          sys.path.insert(0, '.')
+          import TokenModelSwitch as app
+          import tkinter as tk
+          root = tk.Tk()
+          root.withdraw()
+          try:
+              tk.Frame(root, bg=app.COLORS['canvas']).pack()
+              root.update_idletasks()
+              root.update()
+              print('tk_smoke=PASS')
+          finally:
+              root.destroy()
+          "

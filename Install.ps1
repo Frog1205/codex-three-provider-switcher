@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'CodexThreeProviderSwitcher'),
     [switch]$SkipCredentials,
     [switch]$NoShortcut
@@ -52,8 +52,17 @@ foreach ($required in @('CodexProviderSwitcher.ps1', 'Get-CodexRateLimits.ps1', 
 }
 
 [IO.Directory]::CreateDirectory($InstallDir) | Out-Null
-foreach ($file in Get-ChildItem -LiteralPath $sourceDir -File) {
-    [IO.File]::Copy($file.FullName, (Join-Path $InstallDir $file.Name), $true)
+# Recurse: copy every file under src/ (including assets/, etc.) to $InstallDir,
+# preserving relative subpath so e.g. src/assets/codex-switcher-icon.ico
+# lands at $InstallDir/assets/codex-switcher-icon.ico.
+foreach ($file in @(Get-ChildItem -LiteralPath $sourceDir -Recurse -File)) {
+    $rel = $file.FullName.Substring($sourceDir.Length).TrimStart('\', '/')
+    $dest = if ($rel) { Join-Path $InstallDir $rel } else { $InstallDir }
+    $destDir = Split-Path -Path $dest -Parent
+    if (-not (Test-Path -LiteralPath $destDir)) {
+        [IO.Directory]::CreateDirectory($destDir) | Out-Null
+    }
+    [IO.File]::Copy($file.FullName, $dest, $true)
 }
 
 $codexCliEntry = Join-Path $env:APPDATA 'npm\node_modules\@openai\codex\bin\codex.js'
@@ -73,16 +82,18 @@ if (-not $SkipCredentials) {
 if (-not $NoShortcut) {
     $shell = New-Object -ComObject WScript.Shell
     $desktop = $shell.SpecialFolders.Item('Desktop')
-    $shortcutPath = Join-Path $desktop 'Codex Three-Provider Switcher.lnk'
+    $shortcutPath = Join-Path $desktop 'Codex API 路由管理器.lnk'
     $shortcut = $shell.CreateShortcut($shortcutPath)
     $shortcut.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $scriptPath = Join-Path $InstallDir 'CodexProviderSwitcher.ps1'
     $shortcut.Arguments = "-NoLogo -NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -File `"$scriptPath`""
     $shortcut.WorkingDirectory = $InstallDir
-    $shortcut.IconLocation = (Join-Path $env:SystemRoot 'System32\shell32.dll') + ',44'
-    $shortcut.Description = 'Switch Codex Desktop among GPT Official, Honknet, and DeepSeek'
+    $shortcut.IconLocation = Join-Path $InstallDir 'assets\codex-switcher-icon.ico'
+    $shortcut.Description = 'Manage official OpenAI and custom Codex API routes'
     $shortcut.WindowStyle = 7
     $shortcut.Save()
+    $legacyShortcut = Join-Path $desktop 'Codex Three-Provider Switcher.lnk'
+    if (Test-Path -LiteralPath $legacyShortcut) { Remove-Item -LiteralPath $legacyShortcut -Force }
     Write-Output "Desktop shortcut: $shortcutPath"
 }
 

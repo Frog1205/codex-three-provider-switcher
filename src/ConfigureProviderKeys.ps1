@@ -62,12 +62,12 @@ function Set-ProviderKey {
 
 try {
     if ($Language -eq 'zh-CN') {
-        Write-Host 'Codex 三线路切换器 - 配置第三方密钥' -ForegroundColor Cyan
+        Write-Host 'Codex API 路由管理器 - 配置第三方密钥' -ForegroundColor Cyan
         Write-Host '密钥只会保存到当前 Windows 用户环境变量，不会写入项目文件。'
         Write-Host ''
     }
     else {
-        Write-Host 'Codex Three-Provider Switcher - Configure provider keys' -ForegroundColor Cyan
+        Write-Host 'Codex API Route Manager - Configure provider keys' -ForegroundColor Cyan
         Write-Host 'Keys are stored only in Windows user environment variables, not in project files.'
         Write-Host ''
     }

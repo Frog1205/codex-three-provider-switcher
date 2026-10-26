@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $script = Join-Path $repoRoot 'src\CodexProviderSwitcher.ps1'
 $rateLimitReader = Join-Path $repoRoot 'src\Get-CodexRateLimits.ps1'
@@ -26,6 +26,18 @@ try {
     foreach ($requiredUiText in @("[string]`$Language = 'zh-CN'", "LanguageButton = 'English'", "'zh-CN' = @{", "'en' = @{")) {
         if (-not $switcherText.Contains($requiredUiText)) { throw "Localized UI text is missing: $requiredUiText" }
     }
+    foreach ($requiredCustomFlow in @('已保存线路', '测试连接', '保存配置', '切换线路', "'/responses'", "'/chat/completions'", 'if(-not $script:testPassed)', 'OfficialCategory', 'CustomCategory', 'SwitchSelectedRoute', 'opendev')) {
+        if (-not $switcherText.Contains($requiredCustomFlow)) { throw "Custom provider test/save/switch flow is incomplete: $requiredCustomFlow" }
+    }
+    if ($switcherText -notmatch '\$customRouteList\.Size = \[Drawing\.Size\]::new\(654, 144\)' -or
+        $switcherText -notmatch '\$dialog\.ClientSize = \[Drawing\.Size\]::new\(800, 580\)' -or
+        $switcherText.Contains('API Key（仅本次测试/保存）')) {
+        throw 'The custom route list and editor must keep the revised spacious layout.'
+    }
+    $saveHandler = [regex]::Match($switcherText, '(?s)\$save\.Add_Click\(\{(.*?)\r?\n    \}\)').Groups[1].Value
+    if ($saveHandler -match 'Set-CodexProvider') {
+        throw 'Saving a custom provider must not switch the active Codex provider.'
+    }
     if ([regex]::Matches($switcherText, 'LanguageButton\s*=').Count -ne 2) {
         throw 'Both Chinese and English language-toggle labels are required.'
     }
@@ -48,11 +60,13 @@ command = "example"
     [IO.File]::WriteAllText($auth, '{}', (New-Object Text.UTF8Encoding($false)))
     $env:HONKNET_API_KEY = 'test-only-honknet-placeholder'
     $env:DEEPSEEK_API_KEY = 'test-only-deepseek-placeholder'
+    $env:OPENDEV_KEY = 'test-only-opendev-placeholder'
 
     $expected = @(
         @{ Mode = 'gpt'; Provider = 'openai'; Model = 'gpt-5.6-sol' },
         @{ Mode = 'honkai'; Provider = 'honknet'; Model = 'gpt-5.6-sol' },
         @{ Mode = 'ds'; Provider = 'deepseek'; Model = 'deepseek-v4-flash' },
+        @{ Mode = 'opendev'; Provider = 'opendev'; Model = 'gpt-6.1-sol' },
         @{ Mode = 'gpt'; Provider = 'openai'; Model = 'gpt-5.6-sol' }
     )
 
@@ -71,11 +85,12 @@ command = "example"
     }
 
     $backupCount = @(Get-ChildItem -LiteralPath (Join-Path $testRoot 'provider-switch-backups') -Filter '*.toml').Count
-    if ($backupCount -ne 4) { throw "Expected 4 backups, found $backupCount" }
+    if ($backupCount -ne 5) { throw "Expected 5 backups, found $backupCount" }
     Write-Output 'PASS: syntax, Chinese/English UI, quota readers, aliases, provider/model routing, unrelated config preservation, and backups.'
 }
 finally {
     $env:HONKNET_API_KEY = $null
     $env:DEEPSEEK_API_KEY = $null
+    $env:OPENDEV_KEY = $null
     if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
 }
