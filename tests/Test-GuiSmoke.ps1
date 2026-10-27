@@ -1,4 +1,7 @@
-﻿param([string]$OutputDir = (Join-Path $env:TEMP 'codex-route-gui-smoke-results'))
+﻿param(
+    [string]$OutputDir = (Join-Path $env:TEMP 'codex-route-gui-smoke-results'),
+    [string]$SourceDir
+)
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $fixtureRoot = Join-Path $env:TEMP ('codex-gui-fixture-' + [guid]::NewGuid().ToString('N'))
@@ -17,7 +20,7 @@ try {
     }
     $config = Join-Path $fixtureRoot 'config.toml'
     [IO.File]::WriteAllText($config, "model_provider = `"openai`"`r`nmodel = `"offline-fixture`"")
-    $sourceRoot = Join-Path $repoRoot 'src'
+    $sourceRoot = if ($SourceDir) { [IO.Path]::GetFullPath($SourceDir) } else { Join-Path $repoRoot 'src' }
     $source = [IO.File]::ReadAllText((Join-Path $sourceRoot 'CodexProviderSwitcher.ps1'))
     # Evaluate the release source with only modal loops and network starts replaced.
     # All GUI construction, route refresh, localization and editor guards run unchanged.
@@ -29,8 +32,8 @@ try {
     if ($save.Enabled -or $switch.Enabled) { throw 'Untested routes must not be saved or switched.' }
     if (-not $boxes[5].UseSystemPasswordChar) { throw 'API key field is not masked.' }
     if ($labels[1] -notmatch '线路代号' -or $labels[3] -ne '模型 ID' -or $labels[4] -notmatch '选填') { throw 'Beginner field labels are missing.' }
-    $helpText = ($dialog.Controls | Where-Object { $_ -is [Windows.Forms.Label] } | ForEach-Object { $_.Text }) -join ' '
-    foreach ($expectedHelp in @('my-api', '真实 model ID', '只读取该变量', 'API Key')) {
+    $helpText = ($editorPanel.Controls | Where-Object { $_ -is [Windows.Forms.Label] } | ForEach-Object { $_.Text }) -join ' '
+    foreach ($expectedHelp in @('选择已有线路', '给自己看的名称', 'my-api', 'API 基础地址', 'https://api.example.com/v1', '真实 model ID', '只读取该变量', '不是登录密码', '按服务商文档选择')) {
         if (-not $helpText.Contains($expectedHelp)) { throw ('Field help missing: ' + $expectedHelp) }
     }
     $boxes[4].Text = 'CODEX_RELEASE_TEST_KEY'
@@ -41,10 +44,15 @@ try {
     foreach ($control in $dialog.Controls) {
         if ($control.Right -gt $dialog.ClientSize.Width -or $control.Bottom -gt $dialog.ClientSize.Height) { throw 'Editor control exceeds dialog bounds.' }
     }
+    if (-not $editorPanel.AutoScroll -or $editorPanel.Bottom -gt $note.Top) { throw 'Scrollable field help must not cover the fixed footer.' }
+    foreach ($control in $editorPanel.Controls) {
+        if ($control.Right -gt $editorPanel.ClientSize.Width -or $control.Bottom -gt $editorPanel.AutoScrollMinSize.Height) { throw 'Field help exceeds scrollable content bounds.' }
+    }
     $dialog.Show()
     [Windows.Forms.Application]::DoEvents()
     $boxes[0].Text='离线测试'; $boxes[1].Text='gui-fixture'; $boxes[2].Text='https://example.invalid/v1'; $boxes[3].Text='vendor/real-model-id'
     $boxes[4].Text='CODEX_GUI_FIXTURE_KEY'; $boxes[5].Text='ignored-gui-fixture'
+    if ($endpointPreview.Text -ne '实际请求地址：https://example.invalid/v1/responses') { throw 'Responses endpoint preview is incorrect.' }
     $test.PerformClick()
     if (-not $save.Enabled -or $script:mockRequests.Count -ne 1 -or $script:mockRequests[0].Authorization -ne 'Bearer environment-gui-fixture') { throw 'GUI environment-first connection test failed.' }
     if ($script:mockRequests[0].Body.model -ne 'vendor/real-model-id') { throw 'GUI changed the real model ID.' }
@@ -59,15 +67,24 @@ try {
     $test.PerformClick()
     if (-not $save.Enabled -or $script:mockRequests.Count -ne 2 -or $script:mockRequests[1].Authorization -ne 'Bearer direct-gui-fixture') { throw 'GUI direct API key connection test failed.' }
     $boxes[6].SelectedIndex=1
+    if ($endpointPreview.Text -ne '实际请求地址：https://example.invalid/v1/chat/completions') { throw 'Chat endpoint preview is incorrect.' }
     if ($save.Enabled) { throw 'Changing the protocol did not invalidate the connection test.' }
     $test.PerformClick()
     if ($script:mockRequests.Count -ne 3 -or $script:mockRequests[2].Uri -notmatch '/chat/completions$' -or $script:mockRequests[2].Body.model -ne 'vendor/real-model-id') { throw 'Chat completions request did not preserve the model ID.' }
+    $boxes[2].Text='https://example.invalid/v1/chat/completions'
+    $test.PerformClick()
+    if ($script:mockRequests.Count -ne 3 -or $save.Enabled -or $testStatus.Text -notmatch '请移除末尾') { throw 'A full endpoint should be rejected before any request.' }
     foreach ($index in 0..5) { $boxes[$index].Text='' }
     $boxes[6].SelectedIndex=0; $testStatus.Text='尚未测试'
     $dialogBitmap = New-Object Drawing.Bitmap($dialog.Width, $dialog.Height)
     try {
         $dialog.DrawToBitmap($dialogBitmap, [Drawing.Rectangle]::new(0, 0, $dialog.Width, $dialog.Height))
         $dialogBitmap.Save((Join-Path $OutputDir 'custom-editor.png'))
+        $editorPanel.AutoScrollPosition = [Drawing.Point]::new(0, 740)
+        [Windows.Forms.Application]::DoEvents()
+        $dialog.DrawToBitmap($dialogBitmap, [Drawing.Rectangle]::new(0, 0, $dialog.Width, $dialog.Height))
+        $dialogBitmap.Save((Join-Path $OutputDir 'custom-editor-scrolled.png'))
+        if ($test.Bottom -gt $dialog.ClientSize.Height -or $cancel.Bottom -gt $dialog.ClientSize.Height) { throw 'Footer actions became inaccessible after scrolling.' }
     } finally { $dialogBitmap.Dispose(); $dialog.Dispose() }
     return $false
 '@
@@ -75,7 +92,7 @@ try {
     $formCheck = @'
     try {
         if ($form.Text -ne 'Codex API 路由管理器') { throw 'Incorrect product title.' }
-        if ($versionLabel.Text -notmatch 'V_1.4_261026.01') { throw 'Incorrect release version.' }
+        if ($versionLabel.Text -notmatch 'V_1.4_261026.02') { throw 'Incorrect release version.' }
         if ($routeTabs.TabPages.Count -ne 2 -or $customRouteList.Items.Count -ne 3) { throw 'Missing route categories or built-in routes.' }
         if ($null -eq $form.Icon -or -not (Test-Path -LiteralPath $iconPath)) { throw 'Release icon is missing.' }
         $uiState.Language = 'en'

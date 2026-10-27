@@ -28,16 +28,16 @@
 
 请只从本项目 GitHub Releases 下载：
 
-- [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.1/Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261026.01.exe)：自动安装并创建桌面和开始菜单快捷方式。
-- [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.1/Codex-Three-Provider-Switcher-Portable-x64-V_1.4_261026.01.zip)：解压后双击启动，不写入安装目录或卸载信息。
+- [下载安装版 EXE（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.2/Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261026.02.exe)：自动安装并创建桌面和开始菜单快捷方式。
+- [下载免安装便携版 ZIP（Windows）](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.4.2/Codex-Three-Provider-Switcher-Portable-x64-V_1.4_261026.02.zip)：解压后双击启动，不写入安装目录或卸载信息。
 - [下载 macOS Apple Silicon 历史稳定版 v1.3 ZIP](https://github.com/Frog1205/codex-three-provider-switcher/releases/download/v1.3.0/Codex-Three-Provider-Switcher-macOS-AppleSilicon-V_1.3_260829.02.zip)：支持 M1/M2/M3/M4/M5 及后续 Apple Silicon，Intel Mac 不支持。
 - [查看最新版本与更新说明](https://github.com/Frog1205/codex-three-provider-switcher/releases/latest)
 
-Windows 当前版本为 **v1.4.1 / V_1.4_261026.01**。macOS 仍提供 v1.3 稳定版，本次 Windows 的自定义接口管理功能尚未移植到 macOS。
+Windows 当前版本为 **v1.4.2 / V_1.4_261026.02**。macOS 仍提供 v1.3 稳定版，本次 Windows 的自定义接口管理功能尚未移植到 macOS。
 
 ### EXE 安装版
 
-1. 下载 `Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261026.01.exe`。
+1. 下载 `Codex-Three-Provider-Switcher-Setup-x64-V_1.4_261026.02.exe`。
 2. 双击安装，不需要管理员权限。
 3. 安装完成后，双击桌面的“Codex API 路由管理器”。
 4. 只使用 GPT 官方线路时无需配置第三方 Key。
@@ -67,9 +67,9 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 ## 👤 普通用户：界面预览（Windows v1.4）
 
-![Codex API 路由管理器 v1.4 离线测试界面](docs/ui-preview-v1.4.1.png)
+![Codex API 路由管理器 v1.4 离线测试界面](docs/ui-preview-v1.4.2.png)
 
-![自定义接口编辑窗口](docs/custom-editor-v1.4.1.png)
+![自定义接口编辑窗口](docs/custom-editor-v1.4.2.png)
 
 以上为离线测试界面，模型与额度为测试占位信息，不代表服务商在线连通性。
 
@@ -77,7 +77,7 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 ![Codex Provider Switcher V_1.3_260829.02 历史界面](docs/ui-preview-v1.3.png)
 
-`V_1.3_260829.02` 截图仅作历史参考。当前 Windows 版 `V_1.4_261026.01` 已更名为“Codex API 路由管理器”，界面按“官方 OpenAI / 自定义接口”两类入口组织；自定义接口包含 Honknet、DeepSeek、OpenDev 和用户添加的线路。
+`V_1.3_260829.02` 截图仅作历史参考。当前 Windows 版 `V_1.4_261026.02` 已更名为“Codex API 路由管理器”，界面按“官方 OpenAI / 自定义接口”两类入口组织；自定义接口包含 Honknet、DeepSeek、OpenDev 和用户添加的线路。
 
 不同版本的 GUI 外观和变化请查看 [GUI 版本对照](docs/GUI-VERSIONS.md)。
 
@@ -662,7 +662,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Releas
 如需保留历史产物并生成带版本标识的新安装包，可追加 `-ArtifactSuffix`，例如：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.4.1 -ArtifactSuffix V_1.4_261026.01
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Release.ps1 -Version 1.4.2 -ArtifactSuffix V_1.4_261026.02
 ```
 
 这会生成带后缀的 EXE 和 ZIP，不覆盖默认文件名的旧版本产物。
@@ -677,7 +677,20 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\packaging\Build-Releas
 
 ## 自定义第三方 API 线路
 
-“自定义接口”页中的“管理 / 添加接口”可以查看已保存线路、新增或编辑线路，支持输入：线路名称、唯一 ID（线路代号）、Base URL、真实模型 ID、环境变量名（选填）、API Key 和协议（`responses` 或 `chat_completions`）。先点“测试连接”，成功后“保存配置”才可用；测试请求分别调用 `/responses` 或 `/chat/completions`，失败不会保存。保存和切换是两个独立操作：
+“自定义接口”页中的“管理 / 添加接口”可以查看已保存线路、新增或编辑线路，支持输入：线路名称、唯一 ID（线路代号）、Base URL、真实模型 ID、环境变量名（选填）、API Key 和协议（`responses` 或 `chat_completions`）。全部字段旁都有说明；表单可滚动，底部操作按钮固定。Base URL 下方会显示实际请求地址。先点“测试连接”，成功后“保存配置”才可用；测试请求分别调用 `/responses` 或 `/chat/completions`，失败不会保存。保存和切换是两个独立操作：
+
+| 字段 | 填写说明 |
+| --- | --- |
+| 已保存线路 | 选择旧线路查看或编辑；新增时直接填写下面的字段。 |
+| 线路名称 | 给自己看的名称，可用中文，如“我的工作接口”。 |
+| 唯一 ID | 自己起的不重复线路代号，如 `my-api`。 |
+| Base URL | 服务商文档的 API 基础地址，如 `https://api.example.com/v1`；示例域名需替换为服务商真实地址，保留文档路径，不附加完整请求端点。 |
+| 模型 ID | 从服务商模型列表复制真实 `id`，不是模型昵称。 |
+| 环境变量名 | 选填；填写后只读取这个变量。 |
+| API Key | 变量名留空时使用服务商的密钥，不是登录密码。已保存的 Key 可留空沿用。 |
+| 协议 | 按服务商文档选择 `responses` 或 `chat_completions`。 |
+
+Base URL 不填服务商网站首页，也不包含账号、Key、查询参数或片段。程序按协议追加 `/responses` 或 `/chat/completions`，不会强制添加 `/v1`；填写后请核对界面的实际请求地址。
 
 - 唯一 ID 是自己起的内部线路代号，例如 `my-api`；2–49 位小写字母、数字、下划线或短横线，不能和已有线路或内置 ID 重复。
 - 模型 ID 必须从服务商的模型列表复制真实 `model` / `id`，不能填显示昵称；测试和切换会原样使用此 ID。

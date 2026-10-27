@@ -15,7 +15,7 @@
 $ErrorActionPreference = 'Stop'
 $AppId = 'OpenAI.Codex_2p2nqsd0c76g0!App'
 # Release format: V_<major>.<minor>_<YYMMDD>.<daily-sequence>
-$AppVersion = 'V_1.4_261026.01'
+$AppVersion = 'V_1.4_261026.02'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 function Get-Providers {
@@ -368,6 +368,24 @@ function Set-CodexProvider {
     return $true
 }
 
+function Get-CustomProviderEndpoint {
+    param([string]$BaseUrl, [ValidateSet('responses', 'chat_completions')][string]$WireApi)
+    $base = $BaseUrl.Trim().TrimEnd('/')
+    $parsed = $null
+    if (-not [Uri]::TryCreate($base, [UriKind]::Absolute, [ref]$parsed) -or
+        $parsed.Scheme -notin @('http', 'https') -or [string]::IsNullOrWhiteSpace($parsed.Host)) {
+        throw 'Base URL 请填写以 https:// 或 http:// 开头的 API 基础地址。'
+    }
+    if ($parsed.UserInfo -or $parsed.Query -or $parsed.Fragment) {
+        throw 'Base URL 只填写 API 基础地址，不包含账号、API Key、查询参数或 # 片段。'
+    }
+    if ($parsed.AbsolutePath.TrimEnd('/') -match '/(?:responses|chat/completions)$') {
+        throw '请移除末尾的 /responses 或 /chat/completions；程序会按协议自动追加。'
+    }
+    $suffix = if ($WireApi -eq 'responses') { '/responses' } else { '/chat/completions' }
+    return $base + $suffix
+}
+
 function Show-CustomProviderDialog {
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
@@ -379,33 +397,52 @@ function Show-CustomProviderDialog {
     $dialog.FormBorderStyle = 'FixedDialog'
     $dialog.MaximizeBox = $false
     $dialog.Font = New-Object Drawing.Font('Microsoft YaHei UI', 9)
-    $savedLabel = New-Object Windows.Forms.Label; $savedLabel.Text='已保存线路'; $savedLabel.Location=[Drawing.Point]::new(32,24); $savedLabel.Size=[Drawing.Size]::new(140,26); $dialog.Controls.Add($savedLabel)
-    $saved = New-Object Windows.Forms.ComboBox; $saved.Location=[Drawing.Point]::new(188,22); $saved.Size=[Drawing.Size]::new(580,30); $saved.DropDownStyle='DropDownList'; $dialog.Controls.Add($saved)
+    $editorPanel = New-Object Windows.Forms.Panel
+    $editorPanel.Location = [Drawing.Point]::new(0, 0)
+    $editorPanel.Size = [Drawing.Size]::new(800, 480)
+    $editorPanel.AutoScroll = $true
+    $editorPanel.AutoScrollMinSize = [Drawing.Size]::new(0, 740)
+    $dialog.Controls.Add($editorPanel)
+    $savedLabel = New-Object Windows.Forms.Label; $savedLabel.Text='已保存线路'; $savedLabel.Location=[Drawing.Point]::new(32,18); $savedLabel.Size=[Drawing.Size]::new(140,26); $editorPanel.Controls.Add($savedLabel)
+    $saved = New-Object Windows.Forms.ComboBox; $saved.Location=[Drawing.Point]::new(188,16); $saved.Size=[Drawing.Size]::new(562,30); $saved.DropDownStyle='DropDownList'; $editorPanel.Controls.Add($saved)
     $labels = @('线路名称', '唯一 ID（线路代号）', 'Base URL', '模型 ID', '环境变量名（选填）', 'API Key', '协议')
-    $ys = @(68, 110, 174, 216, 280, 354, 426)
+    $ys = @(88, 160, 240, 392, 476, 560, 644)
     $boxes = @{}
     for($i=0;$i -lt $labels.Count;$i++) {
-        $label = New-Object Windows.Forms.Label; $label.Text=$labels[$i]; $label.Location=[Drawing.Point]::new(32,$ys[$i]+5); $label.Size=[Drawing.Size]::new(140,26); $dialog.Controls.Add($label)
-        if($i -eq 6) { $box=New-Object Windows.Forms.ComboBox; $box.Items.AddRange(@('responses','chat_completions')); $box.SelectedIndex=0; $box.DropDownStyle='DropDownList'; $box.Size=[Drawing.Size]::new(580,30) }
-        else { $box=New-Object Windows.Forms.TextBox; $box.Size=[Drawing.Size]::new(580,30); if($i -eq 5){$box.UseSystemPasswordChar=$true} }
-        $box.Location=[Drawing.Point]::new(188,$ys[$i]); $dialog.Controls.Add($box); $boxes[$i]=$box
+        $label = New-Object Windows.Forms.Label; $label.Text=$labels[$i]; $label.Location=[Drawing.Point]::new(32,$ys[$i]+5); $label.Size=[Drawing.Size]::new(140,26); $editorPanel.Controls.Add($label)
+        if($i -eq 6) { $box=New-Object Windows.Forms.ComboBox; $box.Items.AddRange(@('responses','chat_completions')); $box.SelectedIndex=0; $box.DropDownStyle='DropDownList'; $box.Size=[Drawing.Size]::new(562,30) }
+        else { $box=New-Object Windows.Forms.TextBox; $box.Size=[Drawing.Size]::new(562,30); if($i -eq 5){$box.UseSystemPasswordChar=$true} }
+        $box.Location=[Drawing.Point]::new(188,$ys[$i]); $editorPanel.Controls.Add($box); $boxes[$i]=$box
     }
     foreach ($hint in @(
-        @{ Y=142; Text='自己起一个不重复的线路代号，如 my-api；2–49 位小写字母、数字、_ 或 -。' },
-        @{ Y=248; Text='从服务商的模型列表复制真实 model ID，不要填写模型昵称或界面显示名。' },
-        @{ Y=312; Text='选填，如 MY_API_KEY。填写后只读取该变量，不使用下方 API Key。' }
+        @{ Y=48; Height=32; Text='选择已有线路可查看、修改或重新测试；新增线路时直接填写下面的字段。' },
+        @{ Y=120; Height=32; Text='给自己看的名称，可填中文，如“我的工作接口”，方便在主界面识别。' },
+        @{ Y=192; Height=40; Text='自己起一个不重复的线路代号，如 my-api；2–49 位小写字母、数字、_ 或 -。' },
+        @{ Y=272; Height=52; Text='填写服务商文档的 API 基础地址，如 https://api.example.com/v1，保留文档中的路径。不要填网站首页、Key 或完整的 /responses、/chat/completions 请求地址。' },
+        @{ Y=424; Height=40; Text='从服务商的模型列表复制真实 model ID，不要填写模型昵称或界面显示名。' },
+        @{ Y=508; Height=40; Text='选填，如 MY_API_KEY。填写后只读取该变量，不使用下方 API Key；变量不存在会提示错误。' },
+        @{ Y=676; Height=52; Text='按服务商文档选择：Responses 接口选 responses，Chat Completions 接口选 chat_completions。不要按模型名称猜协议。' }
     )) {
         $help = New-Object Windows.Forms.Label
-        $help.Text=$hint.Text; $help.Location=[Drawing.Point]::new(188,$hint.Y); $help.Size=[Drawing.Size]::new(580,34)
-        $help.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $dialog.Controls.Add($help)
+        $help.Text=$hint.Text; $help.Location=[Drawing.Point]::new(188,$hint.Y); $help.Size=[Drawing.Size]::new(562,$hint.Height)
+        $help.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $editorPanel.Controls.Add($help)
     }
-    $keyHint=New-Object Windows.Forms.Label; $keyHint.Text='环境变量名留空时，直接粘贴服务商的 API Key；保存后无需重复填写。'; $keyHint.Location=[Drawing.Point]::new(188,386); $keyHint.Size=[Drawing.Size]::new(580,34); $keyHint.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $dialog.Controls.Add($keyHint)
-    $note=New-Object Windows.Forms.Label; $note.Text='先测试接口，测试通过后才能保存。API Key 安全保存在当前 Windows 用户环境中，程序自动管理；保存不会自动切换线路。'; $note.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $note.Location=[Drawing.Point]::new(32,476); $note.Size=[Drawing.Size]::new(736,44); $dialog.Controls.Add($note)
-    $testStatus=New-Object Windows.Forms.Label; $testStatus.Text='尚未测试'; $testStatus.Location=[Drawing.Point]::new(32,532); $testStatus.Size=[Drawing.Size]::new(736,44); $testStatus.ForeColor=[Drawing.Color]::FromArgb(75,85,99); $dialog.Controls.Add($testStatus)
-    $test=New-Object Windows.Forms.Button; $test.Text='测试连接'; $test.Location=[Drawing.Point]::new(320,594); $test.Size=[Drawing.Size]::new(112,40); $dialog.Controls.Add($test)
-    $save=New-Object Windows.Forms.Button; $save.Text='保存配置'; $save.Location=[Drawing.Point]::new(440,594); $save.Size=[Drawing.Size]::new(112,40); $save.Enabled=$false; $dialog.Controls.Add($save)
-    $switch=New-Object Windows.Forms.Button; $switch.Text='切换线路'; $switch.Location=[Drawing.Point]::new(560,594); $switch.Size=[Drawing.Size]::new(112,40); $switch.Enabled=$false; $dialog.Controls.Add($switch)
-    $cancel=New-Object Windows.Forms.Button; $cancel.Text='关闭'; $cancel.Location=[Drawing.Point]::new(680,594); $cancel.Size=[Drawing.Size]::new(88,40); $dialog.Controls.Add($cancel)
+    $endpointPreview=New-Object Windows.Forms.Label; $endpointPreview.Location=[Drawing.Point]::new(188,332); $endpointPreview.Size=[Drawing.Size]::new(562,48); $endpointPreview.ForeColor=[Drawing.Color]::FromArgb(37,99,235); $editorPanel.Controls.Add($endpointPreview)
+    $updateEndpointPreview = {
+        if ([string]::IsNullOrWhiteSpace($boxes[2].Text)) { $endpointPreview.Text='实际请求地址：填写 Base URL 后自动显示。'; return }
+        try { $endpointPreview.Text='实际请求地址：' + (Get-CustomProviderEndpoint $boxes[2].Text ([string]$boxes[6].SelectedItem)) }
+        catch { $endpointPreview.Text=$_.Exception.Message }
+    }
+    $boxes[2].Add_TextChanged($updateEndpointPreview)
+    $boxes[6].Add_SelectedIndexChanged($updateEndpointPreview)
+    & $updateEndpointPreview
+    $keyHint=New-Object Windows.Forms.Label; $keyHint.Text='环境变量名留空时，粘贴服务商发给你的 API Key（不是登录密码）；输入会隐藏，保存后无需重复填写。'; $keyHint.Location=[Drawing.Point]::new(188,592); $keyHint.Size=[Drawing.Size]::new(562,44); $keyHint.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $editorPanel.Controls.Add($keyHint)
+    $note=New-Object Windows.Forms.Label; $note.Text='上方表单可滚动。先测试连接，再保存配置，需要使用时单独切换线路。API Key 保存在当前 Windows 用户环境中，程序自动管理。'; $note.ForeColor=[Drawing.Color]::FromArgb(105,115,130); $note.Location=[Drawing.Point]::new(32,492); $note.Size=[Drawing.Size]::new(736,44); $dialog.Controls.Add($note)
+    $testStatus=New-Object Windows.Forms.Label; $testStatus.Text='尚未测试'; $testStatus.Location=[Drawing.Point]::new(32,548); $testStatus.Size=[Drawing.Size]::new(736,40); $testStatus.ForeColor=[Drawing.Color]::FromArgb(75,85,99); $dialog.Controls.Add($testStatus)
+    $test=New-Object Windows.Forms.Button; $test.Text='测试连接'; $test.Location=[Drawing.Point]::new(320,600); $test.Size=[Drawing.Size]::new(112,40); $dialog.Controls.Add($test)
+    $save=New-Object Windows.Forms.Button; $save.Text='保存配置'; $save.Location=[Drawing.Point]::new(440,600); $save.Size=[Drawing.Size]::new(112,40); $save.Enabled=$false; $dialog.Controls.Add($save)
+    $switch=New-Object Windows.Forms.Button; $switch.Text='切换线路'; $switch.Location=[Drawing.Point]::new(560,600); $switch.Size=[Drawing.Size]::new(112,40); $switch.Enabled=$false; $dialog.Controls.Add($switch)
+    $cancel=New-Object Windows.Forms.Button; $cancel.Text='关闭'; $cancel.Location=[Drawing.Point]::new(680,600); $cancel.Size=[Drawing.Size]::new(88,40); $dialog.Controls.Add($cancel)
     foreach($button in @($test,$save,$switch,$cancel)){$button.FlatStyle='Flat';$button.FlatAppearance.BorderColor=[Drawing.Color]::FromArgb(215,220,228);$button.BackColor=[Drawing.Color]::White;$button.ForeColor=[Drawing.Color]::FromArgb(40,48,60);$button.Cursor=[Windows.Forms.Cursors]::Hand}
     $test.BackColor=[Drawing.Color]::FromArgb(37,99,235);$test.ForeColor=[Drawing.Color]::White;$test.FlatAppearance.BorderSize=0
     $switch.BackColor=[Drawing.Color]::FromArgb(37,99,235);$switch.ForeColor=[Drawing.Color]::White;$switch.FlatAppearance.BorderSize=0
@@ -424,7 +461,7 @@ function Show-CustomProviderDialog {
         $script:selectedSavedId=[string]$item.id
         $boxes[0].Text=[string]$item.display_name; $boxes[1].Text=[string]$item.id; $boxes[2].Text=[string]$item.base_url; $boxes[3].Text=[string]$item.model
         $boxes[4].Text=if($item.credential_source -eq 'api_key'){''}else{[string]$item.env_key}
-        $keyHint.Text=if($item.credential_source -eq 'api_key'){'已保存此线路的 API Key；留空继续使用，填写新 Key 可更新。'}else{'环境变量名留空时，直接粘贴服务商的 API Key；保存后无需重复填写。'}
+        $keyHint.Text=if($item.credential_source -eq 'api_key'){'已保存此线路的 API Key；留空继续使用，填写新 Key 可更新。'}else{'环境变量名留空时，粘贴服务商发给你的 API Key（不是登录密码）；输入会隐藏，保存后无需重复填写。'}
         $boxes[6].SelectedItem=[string]$item.wire_api; $boxes[5].Text=''
     })
     $cancel.Add_Click({$dialog.DialogResult=[Windows.Forms.DialogResult]::Cancel;$dialog.Close()})
@@ -433,7 +470,8 @@ function Show-CustomProviderDialog {
         $name=$boxes[0].Text.Trim(); $id=$boxes[1].Text.Trim().ToLowerInvariant(); $url=$boxes[2].Text.Trim().TrimEnd('/'); $model=$boxes[3].Text.Trim(); $environmentName=$boxes[4].Text.Trim(); $key=$boxes[5].Text; $wire=[string]$boxes[6].SelectedItem
         if([string]::IsNullOrWhiteSpace($name)){[Windows.Forms.MessageBox]::Show('请输入线路名称');return}
         if($id -notmatch '^[a-z0-9][a-z0-9_-]{1,48}$' -or @('official','honknet','deepseek','opendev','openai').Contains($id)){[Windows.Forms.MessageBox]::Show('ID 只能是小写字母、数字、下划线或短横线，且不能占用内置 ID');return}
-        if($url -notmatch '^https?://'){[Windows.Forms.MessageBox]::Show('Base URL 必须以 http:// 或 https:// 开头');return}
+        try { $uri=Get-CustomProviderEndpoint $url $wire }
+        catch { $testStatus.Text=$_.Exception.Message; return }
         if([string]::IsNullOrWhiteSpace($model)){[Windows.Forms.MessageBox]::Show('请从服务商的模型列表复制真实模型 ID，不要填写模型昵称。');return}
         if(@($savedItems | Where-Object {$_.id -eq $id -and $_.id -ne $script:selectedSavedId}).Count -gt 0){[Windows.Forms.MessageBox]::Show('该线路代号已存在。请使用其他唯一 ID，或先从上方选择要编辑的线路。');return}
         $stored=if($saved.SelectedIndex -ge 0){$savedItems[$saved.SelectedIndex]}else{$null}
@@ -443,8 +481,8 @@ function Show-CustomProviderDialog {
         $test.Enabled=$false; $testStatus.Text='正在请求服务商接口...'; $dialog.Refresh()
         try {
             $headers=@{Authorization='Bearer '+$apiKey}
-            if($wire -eq 'responses'){$body=@{model=$model;input='Reply with the single word OK.';store=$false}|ConvertTo-Json -Depth 5;$uri=$url+'/responses'}
-            else{$body=@{model=$model;messages=@(@{role='user';content='Reply with the single word OK.'});max_tokens=8}|ConvertTo-Json -Depth 5;$uri=$url+'/chat/completions'}
+            if($wire -eq 'responses'){$body=@{model=$model;input='Reply with the single word OK.';store=$false}|ConvertTo-Json -Depth 5}
+            else{$body=@{model=$model;messages=@(@{role='user';content='Reply with the single word OK.'});max_tokens=8}|ConvertTo-Json -Depth 5}
             $result=Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType 'application/json' -Body $body -TimeoutSec 30
             if($null -eq $result){throw '服务端返回空响应。'}
             $script:testPassed=$true; $save.Enabled=$true

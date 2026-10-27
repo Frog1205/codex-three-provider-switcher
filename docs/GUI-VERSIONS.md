@@ -2,7 +2,17 @@
 
 本页记录 Codex API 路由管理器各版本的界面变化。截图均使用脱敏示例数据，不包含真实 API Key。
 
-## V_1.4_261026.01（Windows 当前版本，v1.4.1）
+## V_1.4_261026.02（Windows 当前版本，v1.4.2）
+
+![全部字段说明与 Base URL 预览](custom-editor-v1.4.2.png)
+
+![滚动后的凭据与协议说明](custom-editor-v1.4.2-scrolled.png)
+
+- 全部八个字段都增加填写说明；表单滚动，底部操作固定。
+- Base URL 实时预览最终请求地址，提示保留服务商文档路径。
+- 阻止完整端点重复拼接及在 URL 中放入凭据或查询参数。
+
+## V_1.4_261026.01（历史版本，v1.4.1）
 
 ![修复后的接口编辑窗口](custom-editor-v1.4.1.png)
 
@@ -57,11 +67,12 @@ GUI 版本号使用以下格式：
 V_<大版本>.<需求版本>_<YYMMDD>.<当天序号>
 ```
 
-例如 `V_1.3_260829.02` 表示大版本 1、第三次需求修改、2026-08-29、当天第二次修改。GitHub Release 使用兼容平台排序的三段式版本号（本次 Windows 为 `v1.4.1`），GUI 和安装包文件名保留完整版本标识。
+例如 `V_1.3_260829.02` 表示大版本 1、第三次需求修改、2026-08-29、当天第二次修改。GitHub Release 使用兼容平台排序的三段式版本号（本次 Windows 为 `v1.4.2`），GUI 和安装包文件名保留完整版本标识。
 
 ## 下载对应版本
 
-- Windows 当前版本：[v1.4.1](https://github.com/Frog1205/codex-three-provider-switcher/releases/tag/v1.4.1)
+- Windows 当前版本：[v1.4.2](https://github.com/Frog1205/codex-three-provider-switcher/releases/tag/v1.4.2)
+- Windows 上一版本：[v1.4.1](https://github.com/Frog1205/codex-three-provider-switcher/releases/tag/v1.4.1)
 - Windows 上一版本：[v1.4.0](https://github.com/Frog1205/codex-three-provider-switcher/releases/tag/v1.4.0)
 - macOS 稳定版及 Windows 历史版：[v1.3.0](https://github.com/Frog1205/codex-three-provider-switcher/releases/tag/v1.3.0)
 - 上一版本：[v1.2.0](https://github.com/Frog1205/codex-three-provider-switcher/releases/tag/v1.2.0)

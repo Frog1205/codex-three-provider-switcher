@@ -12,6 +12,19 @@ try {
     [IO.File]::WriteAllText($config, $initial)
     . (Join-Path $repoRoot 'src\CodexProviderSwitcher.ps1') -Mode status -ConfigPath $config -NoRestart | Out-Null
 
+    foreach ($case in @(
+        @{ Base='https://example.invalid/v1'; Wire='responses'; Expected='https://example.invalid/v1/responses' },
+        @{ Base='https://example.invalid/custom/api/v2/'; Wire='chat_completions'; Expected='https://example.invalid/custom/api/v2/chat/completions' },
+        @{ Base='http://127.0.0.1:8000/'; Wire='responses'; Expected='http://127.0.0.1:8000/responses' }
+    )) {
+        if ((Get-CustomProviderEndpoint $case.Base $case.Wire) -ne $case.Expected) { throw 'Base URL path preservation or suffix selection failed.' }
+    }
+    foreach ($invalidBase in @('example.invalid/v1', 'ftp://example.invalid/v1', 'https://example.invalid/v1/responses', 'https://example.invalid/v1/chat/completions/', 'https://example.invalid/v1?key=fixture', 'https://example.invalid/v1#fragment', 'https://user:fixture@example.invalid/v1')) {
+        $rejected = $false
+        try { Get-CustomProviderEndpoint $invalidBase 'responses' | Out-Null } catch { $rejected=$true }
+        if (-not $rejected) { throw 'An invalid, credential-bearing or complete endpoint was accepted as a base URL.' }
+    }
+
     $route = [pscustomobject]@{
         id = 'release-fixture'; display_name = '中文测试线路'; provider_id = 'release-fixture'
         name = '中文测试线路'; base_url = 'http://127.0.0.1:1/v1'; env_key = 'CODEX_RELEASE_TEST_KEY'

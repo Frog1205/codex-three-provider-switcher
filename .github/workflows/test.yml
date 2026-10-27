@@ -28,8 +28,8 @@ jobs:
           & ./tests/Test-MSIXPackaging.ps1
       - name: Build release and test install, uninstall, and portable archive
         run: |
-          & ./packaging/Build-Release.ps1 -Version 1.4.1 -ArtifactSuffix V_1.4_261026.01
-          & ./tests/Test-Packages.ps1 -ArtifactsDir ./dist -ArtifactSuffix V_1.4_261026.01 -Integration
+          & ./packaging/Build-Release.ps1 -Version 1.4.2 -ArtifactSuffix V_1.4_261026.02
+          & ./tests/Test-Packages.ps1 -ArtifactsDir ./dist -ArtifactSuffix V_1.4_261026.02 -Integration
 
   test-macos-arm64:
     name: macOS 14 (arm64) smoke + unit + GUI import
