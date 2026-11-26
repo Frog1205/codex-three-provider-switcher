@@ -6,6 +6,8 @@ $deepSeekBalanceReader = Join-Path $repoRoot 'src\Get-DeepSeekBalance.ps1'
 $honkaiUsageReader = Join-Path $repoRoot 'src\Get-HonkaiUsage.ps1'
 $providers = Join-Path $repoRoot 'src\providers.json'
 $testRoot = Join-Path $env:TEMP ('codex-provider-switcher-test-' + [guid]::NewGuid().ToString('N'))
+$previousAppData = $env:APPDATA
+$previousCodexCliPath = $env:CODEX_CLI_PATH
 [IO.Directory]::CreateDirectory($testRoot) | Out-Null
 
 try {
@@ -24,6 +26,56 @@ try {
     if ($launch.Source -ne 'explicit' -or $launch.FileName -notmatch 'powershell\.exe$') {
         throw 'Native Codex CLI launch resolution returned an unexpected result.'
     }
+
+    $mockNode = Join-Path $testRoot 'mock-node.exe'
+    $mockNodeSource = @'
+using System;
+
+public static class MockAppServer
+{
+    public static int Main(string[] args)
+    {
+        string line;
+        while ((line = Console.ReadLine()) != null)
+        {
+            if (line.Contains("\"method\":\"initialize\""))
+            {
+                Console.WriteLine("{\"id\":0,\"result\":{}}");
+                Console.Out.Flush();
+            }
+            else if (line.Contains("\"method\":\"account/rateLimits/read\""))
+            {
+                Console.WriteLine("{\"id\":6,\"result\":{\"rateLimitsByLimitId\":{\"codex\":{\"primary\":{\"usedPercent\":25,\"windowDurationMins\":300,\"resetsAt\":1893456000},\"secondary\":null,\"planType\":\"test\"}}}}");
+                Console.Out.Flush();
+            }
+        }
+        return 0;
+    }
+}
+'@
+    Add-Type -TypeDefinition $mockNodeSource -Language CSharp -OutputAssembly $mockNode -OutputType ConsoleApplication
+    $npmRoot = Join-Path $testRoot 'npm'
+    $defaultJs = Join-Path $npmRoot 'node_modules\@openai\codex\bin\codex.js'
+    $explicitJs = Join-Path $testRoot 'explicit-codex.js'
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $defaultJs)) | Out-Null
+    Copy-Item -LiteralPath $mockNode -Destination (Join-Path $npmRoot 'node.exe')
+    [IO.File]::WriteAllText($defaultJs, '// offline app-server fixture', (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($explicitJs, '// offline app-server fixture', (New-Object Text.UTF8Encoding($false)))
+    $env:APPDATA = $testRoot
+
+    $codexJsOnly = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $rateLimitReader `
+        -Json -CodexJsPath $explicitJs | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or $codexJsOnly.codex_remaining_percent -ne 75) {
+        throw 'CodexJsPath-only invocation did not use the default Node.js lookup.'
+    }
+
+    $env:CODEX_CLI_PATH = Join-Path $PSHOME 'powershell.exe'
+    $nodeOnly = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $rateLimitReader `
+        -Json -NodePath $mockNode | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or $nodeOnly.codex_remaining_percent -ne 75) {
+        throw 'NodePath-only invocation did not take precedence over an auto-discovered native CLI.'
+    }
+
     $switcherBytes = [IO.File]::ReadAllBytes($script)
     if ($switcherBytes.Length -lt 3 -or $switcherBytes[0] -ne 0xEF -or $switcherBytes[1] -ne 0xBB -or $switcherBytes[2] -ne 0xBF) {
         throw 'The localized switcher must use UTF-8 with BOM for Windows PowerShell 5.1.'
@@ -63,30 +115,30 @@ shell_tool = true
 command = "example"
 '@
     [IO.File]::WriteAllText($config, $initial, (New-Object Text.UTF8Encoding($false)))
-    if (Test-Path -LiteralPath $auth) { Remove-Item -LiteralPath $auth -Force }
     $previousErrorAction = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    try {
-        & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $script `
-            -Mode gpt -ConfigPath $config -ProvidersPath $providers -NoRestart 2>$null | Out-Null
-    }
-    finally {
-        $ErrorActionPreference = $previousErrorAction
-    }
-    if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($config) -ne $initial) {
-        throw 'Official switching must be blocked when auth.json is missing.'
-    }
-    [IO.File]::WriteAllText($auth, '{}', (New-Object Text.UTF8Encoding($false)))
-    $ErrorActionPreference = 'Continue'
-    try {
-        & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $script `
-            -Mode gpt -ConfigPath $config -ProvidersPath $providers -NoRestart 2>$null | Out-Null
-    }
-    finally {
-        $ErrorActionPreference = $previousErrorAction
-    }
-    if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($config) -ne $initial) {
-        throw 'Official switching must be blocked when auth.json contains no credential.'
+    foreach ($invalidAuth in @(
+        @{ Label = 'missing auth.json'; Json = $null },
+        @{ Label = 'empty auth.json'; Json = '{}' },
+        @{ Label = 'boolean API key'; Json = '{"OPENAI_API_KEY":true}' },
+        @{ Label = 'boolean ChatGPT token'; Json = '{"tokens":{"access_token":false}}' }
+    )) {
+        if ($null -eq $invalidAuth.Json) {
+            if (Test-Path -LiteralPath $auth) { Remove-Item -LiteralPath $auth -Force }
+        }
+        else {
+            [IO.File]::WriteAllText($auth, $invalidAuth.Json, (New-Object Text.UTF8Encoding($false)))
+        }
+        $ErrorActionPreference = 'Continue'
+        try {
+            & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $script `
+                -Mode gpt -ConfigPath $config -ProvidersPath $providers -NoRestart 2>$null | Out-Null
+        }
+        finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
+        if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($config) -ne $initial) {
+            throw "Official switching must be blocked for $($invalidAuth.Label)."
+        }
     }
     [IO.File]::WriteAllText(
         $auth,
@@ -121,9 +173,11 @@ command = "example"
 
     $backupCount = @(Get-ChildItem -LiteralPath (Join-Path $testRoot 'provider-switch-backups') -Filter '*.toml').Count
     if ($backupCount -ne 5) { throw "Expected 5 backups, found $backupCount" }
-    Write-Output 'PASS: syntax, auth validation, native CLI resolution, Chinese/English UI, quota readers, aliases, provider/model routing, unrelated config preservation, and backups.'
+    Write-Output 'PASS: syntax, strict auth types, independent npm parameters, native CLI resolution, Chinese/English UI, quota readers, aliases, provider/model routing, unrelated config preservation, and backups.'
 }
 finally {
+    $env:APPDATA = $previousAppData
+    $env:CODEX_CLI_PATH = $previousCodexCliPath
     $env:HONKNET_API_KEY = $null
     $env:DEEPSEEK_API_KEY = $null
     $env:OPENDEV_KEY = $null

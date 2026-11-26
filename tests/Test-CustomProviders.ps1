@@ -16,8 +16,16 @@ try {
     if ((Get-OfficialAuthStatus).Reason -ne 'missing') { throw 'Missing official auth was not classified correctly.' }
     [IO.File]::WriteAllText($authPath, '{', (New-Object Text.UTF8Encoding($false)))
     if ((Get-OfficialAuthStatus).Reason -ne 'invalid') { throw 'Malformed official auth was not rejected.' }
-    [IO.File]::WriteAllText($authPath, '{}', (New-Object Text.UTF8Encoding($false)))
-    if ((Get-OfficialAuthStatus).Ready) { throw 'Empty official auth was treated as signed in.' }
+    foreach ($invalidAuth in @(
+        '{}',
+        '{"OPENAI_API_KEY":true}',
+        '{"OPENAI_API_KEY":false}',
+        '{"tokens":{"access_token":false}}',
+        '{"access_token":true}'
+    )) {
+        [IO.File]::WriteAllText($authPath, $invalidAuth, (New-Object Text.UTF8Encoding($false)))
+        if ((Get-OfficialAuthStatus).Ready) { throw "Invalid official auth was treated as signed in: $invalidAuth" }
+    }
     [IO.File]::WriteAllText($authPath, '{"OPENAI_API_KEY":"test-only-placeholder"}', (New-Object Text.UTF8Encoding($false)))
     if (-not (Get-OfficialAuthStatus).Ready) { throw 'API-key official auth was not detected.' }
     [IO.File]::WriteAllText($authPath, '{"tokens":{"access_token":"test-only-placeholder"}}', (New-Object Text.UTF8Encoding($false)))

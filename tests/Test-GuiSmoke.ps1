@@ -100,10 +100,12 @@ try {
             throw ('Official switching must be disabled before sign-in. enabled={0} text={1} status={2}' -f `
                 $officialSwitchButton.Enabled, $officialSwitchButton.Text, $officialRouteStatus.Text)
         }
-        [IO.File]::WriteAllText($authPath, '{}', (New-Object Text.UTF8Encoding($false)))
-        & $refresh
-        if ($officialSwitchButton.Enabled -or $officialRouteStatus.Text -ne '官方登录凭证无效') {
-            throw 'Malformed official credentials must keep switching disabled.'
+        foreach ($invalidAuth in @('{}', '{"OPENAI_API_KEY":true}', '{"tokens":{"access_token":false}}')) {
+            [IO.File]::WriteAllText($authPath, $invalidAuth, (New-Object Text.UTF8Encoding($false)))
+            & $refresh
+            if ($officialSwitchButton.Enabled -or $officialRouteStatus.Text -ne '官方登录凭证无效') {
+                throw "Malformed official credentials must keep switching disabled: $invalidAuth"
+            }
         }
         [IO.File]::WriteAllText($authPath, '{"OPENAI_API_KEY":"test-only-placeholder"}', (New-Object Text.UTF8Encoding($false)))
         & $refresh

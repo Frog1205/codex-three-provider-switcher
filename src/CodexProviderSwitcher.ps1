@@ -185,7 +185,9 @@ function Get-OfficialAuthStatus {
     }
 
     $apiKeyProperty = $auth.PSObject.Properties['OPENAI_API_KEY']
-    if ($null -ne $apiKeyProperty -and -not [string]::IsNullOrWhiteSpace([string]$apiKeyProperty.Value)) {
+    if ($null -ne $apiKeyProperty -and
+        $apiKeyProperty.Value -is [string] -and
+        -not [string]::IsNullOrWhiteSpace($apiKeyProperty.Value)) {
         return [pscustomobject]@{ Ready = $true; Reason = 'api_key'; Path = $AuthPath }
     }
 
@@ -194,7 +196,9 @@ function Get-OfficialAuthStatus {
     if ($null -ne $tokens -and $tokens -isnot [array]) {
         foreach ($tokenName in @('access_token', 'refresh_token', 'id_token')) {
             $tokenProperty = $tokens.PSObject.Properties[$tokenName]
-            if ($null -ne $tokenProperty -and -not [string]::IsNullOrWhiteSpace([string]$tokenProperty.Value)) {
+            if ($null -ne $tokenProperty -and
+                $tokenProperty.Value -is [string] -and
+                -not [string]::IsNullOrWhiteSpace($tokenProperty.Value)) {
                 return [pscustomobject]@{ Ready = $true; Reason = 'chatgpt'; Path = $AuthPath }
             }
         }
@@ -202,7 +206,9 @@ function Get-OfficialAuthStatus {
 
     foreach ($tokenName in @('access_token', 'refresh_token')) {
         $tokenProperty = $auth.PSObject.Properties[$tokenName]
-        if ($null -ne $tokenProperty -and -not [string]::IsNullOrWhiteSpace([string]$tokenProperty.Value)) {
+        if ($null -ne $tokenProperty -and
+            $tokenProperty.Value -is [string] -and
+            -not [string]::IsNullOrWhiteSpace($tokenProperty.Value)) {
             return [pscustomobject]@{ Ready = $true; Reason = 'access_token'; Path = $AuthPath }
         }
     }

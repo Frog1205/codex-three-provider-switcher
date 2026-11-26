@@ -37,6 +37,15 @@ function Get-FirstExistingPath {
     return $null
 }
 
+function Get-DefaultNodePath {
+    $bundledNode = Join-Path $env:APPDATA 'npm\node.exe'
+    $nodeCommand = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    return Get-FirstExistingPath @(
+        $bundledNode,
+        $(if ($null -ne $nodeCommand) { $nodeCommand.Source } else { $null })
+    )
+}
+
 function Resolve-CodexLaunch {
     if (-not [string]::IsNullOrWhiteSpace($CodexPath)) {
         $native = Get-FirstExistingPath @($CodexPath)
@@ -48,12 +57,25 @@ function Resolve-CodexLaunch {
         }
     }
 
-    if (-not [string]::IsNullOrWhiteSpace($CodexJsPath)) {
-        $npmCodex = Get-FirstExistingPath @($CodexJsPath)
-        if ($null -eq $npmCodex) { throw "Codex CLI was not found: $CodexJsPath" }
-        if ([string]::IsNullOrWhiteSpace($NodePath)) { throw 'Node.js is required when CodexJsPath is specified.' }
-        $node = Get-FirstExistingPath @($NodePath)
-        if ($null -eq $node) { throw "Node.js was not found: $NodePath" }
+    if (-not [string]::IsNullOrWhiteSpace($NodePath) -or -not [string]::IsNullOrWhiteSpace($CodexJsPath)) {
+        $npmCodex = if (-not [string]::IsNullOrWhiteSpace($CodexJsPath)) {
+            Get-FirstExistingPath @($CodexJsPath)
+        }
+        else {
+            Get-FirstExistingPath @((Join-Path $env:APPDATA 'npm\node_modules\@openai\codex\bin\codex.js'))
+        }
+        if ($null -eq $npmCodex) {
+            throw 'The default npm Codex CLI was not found. Specify CodexJsPath or install @openai/codex.'
+        }
+        $node = if (-not [string]::IsNullOrWhiteSpace($NodePath)) {
+            Get-FirstExistingPath @($NodePath)
+        }
+        else {
+            Get-DefaultNodePath
+        }
+        if ($null -eq $node) {
+            throw 'Node.js was not found. Specify NodePath, install Node.js, or configure a native codex.exe.'
+        }
         return [pscustomobject]@{
             FileName = $node
             Arguments = ('"{0}" app-server --stdio -c model_provider=openai' -f $npmCodex)
@@ -87,12 +109,7 @@ function Resolve-CodexLaunch {
 
     $npmCodex = Join-Path $env:APPDATA 'npm\node_modules\@openai\codex\bin\codex.js'
     if (Test-Path -LiteralPath $npmCodex) {
-        $bundledNode = Join-Path $env:APPDATA 'npm\node.exe'
-        $nodeCommand = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-        $node = Get-FirstExistingPath @(
-            $bundledNode,
-            $(if ($null -ne $nodeCommand) { $nodeCommand.Source } else { $null })
-        )
+        $node = Get-DefaultNodePath
         if ($null -eq $node) {
             throw 'Node.js was not found. Install Node.js or configure CODEX_CLI_PATH to a native codex.exe.'
         }
