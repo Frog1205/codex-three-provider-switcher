@@ -12,6 +12,18 @@ try {
     [IO.File]::WriteAllText($config, $initial)
     . (Join-Path $repoRoot 'src\CodexProviderSwitcher.ps1') -Mode status -ConfigPath $config -NoRestart | Out-Null
 
+    $authPath = Join-Path $testRoot 'auth.json'
+    if ((Get-OfficialAuthStatus).Reason -ne 'missing') { throw 'Missing official auth was not classified correctly.' }
+    [IO.File]::WriteAllText($authPath, '{', (New-Object Text.UTF8Encoding($false)))
+    if ((Get-OfficialAuthStatus).Reason -ne 'invalid') { throw 'Malformed official auth was not rejected.' }
+    [IO.File]::WriteAllText($authPath, '{}', (New-Object Text.UTF8Encoding($false)))
+    if ((Get-OfficialAuthStatus).Ready) { throw 'Empty official auth was treated as signed in.' }
+    [IO.File]::WriteAllText($authPath, '{"OPENAI_API_KEY":"test-only-placeholder"}', (New-Object Text.UTF8Encoding($false)))
+    if (-not (Get-OfficialAuthStatus).Ready) { throw 'API-key official auth was not detected.' }
+    [IO.File]::WriteAllText($authPath, '{"tokens":{"access_token":"test-only-placeholder"}}', (New-Object Text.UTF8Encoding($false)))
+    if (-not (Get-OfficialAuthStatus).Ready) { throw 'ChatGPT-token official auth was not detected.' }
+    Remove-Item -LiteralPath $authPath -Force
+
     foreach ($case in @(
         @{ Base='https://example.invalid/v1'; Wire='responses'; Expected='https://example.invalid/v1/responses' },
         @{ Base='https://example.invalid/custom/api/v2/'; Wire='chat_completions'; Expected='https://example.invalid/custom/api/v2/chat/completions' },
@@ -86,7 +98,7 @@ try {
 
     Save-CustomProviders @()
     if (@(Get-CustomProviders).Count -ne 0) { throw 'Empty registry failed.' }
-    Write-Output 'PASS: custom registry, exact model IDs, environment-first credentials, no missing-variable fallback, direct-key save/reload/fresh-process switch, credential isolation, and exact backup.'
+    Write-Output 'PASS: official auth shape validation, custom registry, exact model IDs, environment-first credentials, no missing-variable fallback, direct-key save/reload/fresh-process switch, credential isolation, and exact backup.'
 }
 finally {
     $env:APPDATA = $previousAppData

@@ -19,7 +19,7 @@ try {
         return [pscustomobject]@{ output_text='OK' }
     }
     $config = Join-Path $fixtureRoot 'config.toml'
-    [IO.File]::WriteAllText($config, "model_provider = `"openai`"`r`nmodel = `"offline-fixture`"")
+    [IO.File]::WriteAllText($config, "model_provider = `"deepseek`"`r`nmodel = `"offline-fixture`"")
     $sourceRoot = if ($SourceDir) { [IO.Path]::GetFullPath($SourceDir) } else { Join-Path $repoRoot 'src' }
     $source = [IO.File]::ReadAllText((Join-Path $sourceRoot 'CodexProviderSwitcher.ps1'))
     # Evaluate the release source with only modal loops and network starts replaced.
@@ -95,6 +95,21 @@ try {
         if ($versionLabel.Text -notmatch 'V_1.4_261026.02') { throw 'Incorrect release version.' }
         if ($routeTabs.TabPages.Count -ne 2 -or $customRouteList.Items.Count -ne 3) { throw 'Missing route categories or built-in routes.' }
         if ($null -eq $form.Icon -or -not (Test-Path -LiteralPath $iconPath)) { throw 'Release icon is missing.' }
+        $authPath = Join-Path (Split-Path -Parent $ConfigPath) 'auth.json'
+        if ($officialSwitchButton.Enabled -or $officialSwitchButton.Text -ne '请先登录' -or $officialRouteStatus.Text -ne '未检测到官方登录') {
+            throw ('Official switching must be disabled before sign-in. enabled={0} text={1} status={2}' -f `
+                $officialSwitchButton.Enabled, $officialSwitchButton.Text, $officialRouteStatus.Text)
+        }
+        [IO.File]::WriteAllText($authPath, '{}', (New-Object Text.UTF8Encoding($false)))
+        & $refresh
+        if ($officialSwitchButton.Enabled -or $officialRouteStatus.Text -ne '官方登录凭证无效') {
+            throw 'Malformed official credentials must keep switching disabled.'
+        }
+        [IO.File]::WriteAllText($authPath, '{"OPENAI_API_KEY":"test-only-placeholder"}', (New-Object Text.UTF8Encoding($false)))
+        & $refresh
+        if (-not $officialSwitchButton.Enabled -or $officialSwitchButton.Text -ne '切换到此线路' -or $officialRouteStatus.Text -ne '官方登录可用') {
+            throw 'Valid official sign-in did not enable official switching.'
+        }
         $uiState.Language = 'en'
         & $updateLanguage
         if ($form.Text -ne 'Codex API Route Manager' -or $customPage.Text -ne 'Custom endpoints') { throw 'English localization failed.' }

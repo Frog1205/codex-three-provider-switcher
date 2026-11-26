@@ -18,12 +18,18 @@ try {
     if (-not (Test-Path -LiteralPath $rateLimitReader)) { throw 'Rate-limit reader is missing.' }
     if (-not (Test-Path -LiteralPath $deepSeekBalanceReader)) { throw 'DeepSeek balance reader is missing.' }
     if (-not (Test-Path -LiteralPath $honkaiUsageReader)) { throw 'Honknet usage reader is missing.' }
+    $launchJson = & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $rateLimitReader -ResolveOnly -Json -CodexPath (Join-Path $PSHOME 'powershell.exe')
+    if ($LASTEXITCODE -ne 0) { throw 'Native Codex CLI launch resolution failed.' }
+    $launch = $launchJson | ConvertFrom-Json
+    if ($launch.Source -ne 'explicit' -or $launch.FileName -notmatch 'powershell\.exe$') {
+        throw 'Native Codex CLI launch resolution returned an unexpected result.'
+    }
     $switcherBytes = [IO.File]::ReadAllBytes($script)
     if ($switcherBytes.Length -lt 3 -or $switcherBytes[0] -ne 0xEF -or $switcherBytes[1] -ne 0xBB -or $switcherBytes[2] -ne 0xBF) {
         throw 'The localized switcher must use UTF-8 with BOM for Windows PowerShell 5.1.'
     }
     $switcherText = [IO.File]::ReadAllText($script, [Text.Encoding]::UTF8)
-    foreach ($requiredUiText in @("[string]`$Language = 'zh-CN'", "LanguageButton = 'English'", "'zh-CN' = @{", "'en' = @{")) {
+    foreach ($requiredUiText in @("[string]`$Language = 'zh-CN'", "LanguageButton = 'English'", "'zh-CN' = @{", "'en' = @{", 'ErrorNotLoggedIn =')) {
         if (-not $switcherText.Contains($requiredUiText)) { throw "Localized UI text is missing: $requiredUiText" }
     }
     foreach ($requiredCustomFlow in @('已保存线路', '测试连接', '保存配置', '切换线路', "'/responses'", "'/chat/completions'", 'if(-not $script:testPassed)', 'OfficialCategory', 'CustomCategory', 'SwitchSelectedRoute', 'opendev')) {
@@ -57,7 +63,36 @@ shell_tool = true
 command = "example"
 '@
     [IO.File]::WriteAllText($config, $initial, (New-Object Text.UTF8Encoding($false)))
+    if (Test-Path -LiteralPath $auth) { Remove-Item -LiteralPath $auth -Force }
+    $previousErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $script `
+            -Mode gpt -ConfigPath $config -ProvidersPath $providers -NoRestart 2>$null | Out-Null
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($config) -ne $initial) {
+        throw 'Official switching must be blocked when auth.json is missing.'
+    }
     [IO.File]::WriteAllText($auth, '{}', (New-Object Text.UTF8Encoding($false)))
+    $ErrorActionPreference = 'Continue'
+    try {
+        & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $script `
+            -Mode gpt -ConfigPath $config -ProvidersPath $providers -NoRestart 2>$null | Out-Null
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorAction
+    }
+    if ($LASTEXITCODE -eq 0 -or [IO.File]::ReadAllText($config) -ne $initial) {
+        throw 'Official switching must be blocked when auth.json contains no credential.'
+    }
+    [IO.File]::WriteAllText(
+        $auth,
+        '{"auth_mode":"apikey","OPENAI_API_KEY":"test-only-placeholder"}',
+        (New-Object Text.UTF8Encoding($false))
+    )
     $env:HONKNET_API_KEY = 'test-only-honknet-placeholder'
     $env:DEEPSEEK_API_KEY = 'test-only-deepseek-placeholder'
     $env:OPENDEV_KEY = 'test-only-opendev-placeholder'
@@ -86,7 +121,7 @@ command = "example"
 
     $backupCount = @(Get-ChildItem -LiteralPath (Join-Path $testRoot 'provider-switch-backups') -Filter '*.toml').Count
     if ($backupCount -ne 5) { throw "Expected 5 backups, found $backupCount" }
-    Write-Output 'PASS: syntax, Chinese/English UI, quota readers, aliases, provider/model routing, unrelated config preservation, and backups.'
+    Write-Output 'PASS: syntax, auth validation, native CLI resolution, Chinese/English UI, quota readers, aliases, provider/model routing, unrelated config preservation, and backups.'
 }
 finally {
     $env:HONKNET_API_KEY = $null

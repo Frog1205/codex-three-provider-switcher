@@ -3,7 +3,9 @@ param(
     [ValidateRange(3, 60)]
     [int]$TimeoutSeconds = 15,
     [string]$NodePath,
-    [string]$CodexJsPath
+    [string]$CodexJsPath,
+    [string]$CodexPath,
+    [switch]$ResolveOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -24,26 +26,102 @@ function Read-ServerMessage {
     return $task.Result | ConvertFrom-Json
 }
 
-if ([string]::IsNullOrWhiteSpace($NodePath)) {
-    $bundledNode = Join-Path $env:APPDATA 'npm\node.exe'
-    if (Test-Path -LiteralPath $bundledNode) {
-        $NodePath = $bundledNode
+function Get-FirstExistingPath {
+    param([string[]]$Candidates)
+
+    foreach ($candidate in $Candidates) {
+        if (-not [string]::IsNullOrWhiteSpace($candidate) -and (Test-Path -LiteralPath $candidate)) {
+            return [IO.Path]::GetFullPath($candidate)
+        }
+    }
+    return $null
+}
+
+function Resolve-CodexLaunch {
+    if (-not [string]::IsNullOrWhiteSpace($CodexPath)) {
+        $native = Get-FirstExistingPath @($CodexPath)
+        if ($null -eq $native) { throw "Codex CLI was not found: $CodexPath" }
+        return [pscustomobject]@{
+            FileName = $native
+            Arguments = 'app-server --stdio -c model_provider=openai'
+            Source = 'explicit'
+        }
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($CodexJsPath)) {
+        $npmCodex = Get-FirstExistingPath @($CodexJsPath)
+        if ($null -eq $npmCodex) { throw "Codex CLI was not found: $CodexJsPath" }
+        if ([string]::IsNullOrWhiteSpace($NodePath)) { throw 'Node.js is required when CodexJsPath is specified.' }
+        $node = Get-FirstExistingPath @($NodePath)
+        if ($null -eq $node) { throw "Node.js was not found: $NodePath" }
+        return [pscustomobject]@{
+            FileName = $node
+            Arguments = ('"{0}" app-server --stdio -c model_provider=openai' -f $npmCodex)
+            Source = 'explicit-npm'
+        }
+    }
+
+    $nativeCandidates = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($env:CODEX_CLI_PATH)) {
+        $nativeCandidates.Add($env:CODEX_CLI_PATH)
+    }
+    $pathCommand = Get-Command codex.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $pathCommand) {
+        $nativeCandidates.Add($pathCommand.Source)
+    }
+    $nativeCandidates.Add((Join-Path $env:USERPROFILE '.codex\.sandbox-bin\codex.exe'))
+    foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name = 'codex.exe'" -ErrorAction SilentlyContinue)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$process.ExecutablePath)) {
+            $nativeCandidates.Add([string]$process.ExecutablePath)
+        }
+    }
+
+    $native = Get-FirstExistingPath $nativeCandidates.ToArray()
+    if ($null -ne $native) {
+        return [pscustomobject]@{
+            FileName = $native
+            Arguments = 'app-server --stdio -c model_provider=openai'
+            Source = 'native'
+        }
+    }
+
+    $npmCodex = Join-Path $env:APPDATA 'npm\node_modules\@openai\codex\bin\codex.js'
+    if (Test-Path -LiteralPath $npmCodex) {
+        $bundledNode = Join-Path $env:APPDATA 'npm\node.exe'
+        $nodeCommand = Get-Command node.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        $node = Get-FirstExistingPath @(
+            $bundledNode,
+            $(if ($null -ne $nodeCommand) { $nodeCommand.Source } else { $null })
+        )
+        if ($null -eq $node) {
+            throw 'Node.js was not found. Install Node.js or configure CODEX_CLI_PATH to a native codex.exe.'
+        }
+        return [pscustomobject]@{
+            FileName = $node
+            Arguments = ('"{0}" app-server --stdio -c model_provider=openai' -f [IO.Path]::GetFullPath($npmCodex))
+            Source = 'npm'
+        }
+    }
+
+    throw 'Codex CLI was not found. Install Codex Desktop or @openai/codex, or set CODEX_CLI_PATH to codex.exe.'
+}
+
+$launch = Resolve-CodexLaunch
+if ($ResolveOnly) {
+    if ($Json) {
+        $launch | ConvertTo-Json -Compress
     }
     else {
-        $NodePath = (Get-Command node.exe -ErrorAction Stop).Source
+        Write-Output "Codex CLI: $($launch.FileName)"
+        Write-Output "Source: $($launch.Source)"
+        Write-Output "Arguments: $($launch.Arguments)"
     }
-}
-if ([string]::IsNullOrWhiteSpace($CodexJsPath)) {
-    $CodexJsPath = Join-Path $env:APPDATA 'npm\node_modules\@openai\codex\bin\codex.js'
-}
-if (-not (Test-Path -LiteralPath $NodePath)) { throw "Node.js was not found: $NodePath" }
-if (-not (Test-Path -LiteralPath $CodexJsPath)) {
-    throw "Codex CLI was not found: $CodexJsPath. Install or update @openai/codex first."
+    return
 }
 
 $startInfo = New-Object Diagnostics.ProcessStartInfo
-$startInfo.FileName = $NodePath
-$startInfo.Arguments = ('"{0}" app-server --stdio -c model_provider=openai' -f $CodexJsPath)
+$startInfo.FileName = $launch.FileName
+$startInfo.Arguments = $launch.Arguments
 $startInfo.UseShellExecute = $false
 $startInfo.RedirectStandardInput = $true
 $startInfo.RedirectStandardOutput = $true
