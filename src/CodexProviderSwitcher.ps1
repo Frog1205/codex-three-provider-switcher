@@ -144,7 +144,7 @@ function Get-TopLevelValue {
 
     $firstTable = [regex]::Match($Text, '(?m)^[ \t]*\[')
     $head = if ($firstTable.Success) { $Text.Substring(0, $firstTable.Index) } else { $Text }
-    $match = [regex]::Match($head, "(?m)^[ \t]*$([regex]::Escape($Key))[ \t]*=[ \t]*[`"']([^`"']+)[`"'][ \t]*$")
+    $match = [regex]::Match($head, "(?m)^[ \t]*$([regex]::Escape($Key))[ \t]*=[ \t]*[`"']([^`"']+)[`"'][ \t\r]*$")
     if ($match.Success) { return $match.Groups[1].Value }
     return $null
 }
@@ -158,6 +158,62 @@ function Get-KeyPresent {
         }
     }
     return $false
+}
+
+function Get-OfficialAuthStatus {
+    param([string]$AuthPath = (Join-Path (Split-Path -Parent $ConfigPath) 'auth.json'))
+
+    foreach ($environmentName in @('OPENAI_API_KEY', 'CODEX_ACCESS_TOKEN')) {
+        if (Get-KeyPresent $environmentName) {
+            return [pscustomobject]@{ Ready = $true; Reason = 'environment'; Path = $AuthPath }
+        }
+    }
+
+    if (-not (Test-Path -LiteralPath $AuthPath)) {
+        return [pscustomobject]@{ Ready = $false; Reason = 'missing'; Path = $AuthPath }
+    }
+
+    try {
+        $auth = Get-Content -Raw -Encoding UTF8 -LiteralPath $AuthPath | ConvertFrom-Json
+    }
+    catch {
+        return [pscustomobject]@{ Ready = $false; Reason = 'invalid'; Path = $AuthPath }
+    }
+
+    if ($null -eq $auth -or $auth -is [array]) {
+        return [pscustomobject]@{ Ready = $false; Reason = 'invalid'; Path = $AuthPath }
+    }
+
+    $apiKeyProperty = $auth.PSObject.Properties['OPENAI_API_KEY']
+    if ($null -ne $apiKeyProperty -and
+        $apiKeyProperty.Value -is [string] -and
+        -not [string]::IsNullOrWhiteSpace($apiKeyProperty.Value)) {
+        return [pscustomobject]@{ Ready = $true; Reason = 'api_key'; Path = $AuthPath }
+    }
+
+    $tokensProperty = $auth.PSObject.Properties['tokens']
+    $tokens = if ($null -ne $tokensProperty) { $tokensProperty.Value } else { $null }
+    if ($null -ne $tokens -and $tokens -isnot [array]) {
+        foreach ($tokenName in @('access_token', 'refresh_token', 'id_token')) {
+            $tokenProperty = $tokens.PSObject.Properties[$tokenName]
+            if ($null -ne $tokenProperty -and
+                $tokenProperty.Value -is [string] -and
+                -not [string]::IsNullOrWhiteSpace($tokenProperty.Value)) {
+                return [pscustomobject]@{ Ready = $true; Reason = 'chatgpt'; Path = $AuthPath }
+            }
+        }
+    }
+
+    foreach ($tokenName in @('access_token', 'refresh_token')) {
+        $tokenProperty = $auth.PSObject.Properties[$tokenName]
+        if ($null -ne $tokenProperty -and
+            $tokenProperty.Value -is [string] -and
+            -not [string]::IsNullOrWhiteSpace($tokenProperty.Value)) {
+            return [pscustomobject]@{ Ready = $true; Reason = 'access_token'; Path = $AuthPath }
+        }
+    }
+
+    return [pscustomobject]@{ Ready = $false; Reason = 'invalid'; Path = $AuthPath }
 }
 
 function Get-CatalogPath {
@@ -225,9 +281,9 @@ function New-SwitchedConfig {
     if (-not (Test-Path -LiteralPath $ConfigPath)) { throw "Config file not found: $ConfigPath" }
     $definition = Get-Definition $Provider
     if ([bool]$definition.requires_openai_auth) {
-        $authPath = Join-Path (Split-Path -Parent $ConfigPath) 'auth.json'
-        if (-not (Test-Path -LiteralPath $authPath)) {
-            throw 'Official OpenAI login was not found. Sign in to Codex first.'
+        $authStatus = Get-OfficialAuthStatus
+        if (-not $authStatus.Ready) {
+            throw 'Official OpenAI login is missing or invalid. Sign in to Codex first.'
         }
     }
     if (-not [string]::IsNullOrWhiteSpace([string]$definition.env_key)) {
@@ -549,6 +605,8 @@ function Show-Switcher {
             KeyMissingLabel = 'API 密钥未配置'
             OfficialAuthReady = '官方登录可用'
             OfficialAuthMissing = '未检测到官方登录'
+            OfficialAuthInvalid = '官方登录凭证无效'
+            LoginRequired = '请先登录'
             LastSync = '每 {0} 秒自动刷新'
             CurrentStatus = '当前线路：{0}    模型：{1}'
             CurrentProvider = '当前线路：{0}'
@@ -569,7 +627,7 @@ function Show-Switcher {
             SwitchDoneTitle = '切换完成'
             SwitchDone = '线路已切换。请在 Codex 中新建任务。'
             SwitchFailedTitle = '切换失败'
-            FriendlyLoginMissing = '未检测到 OpenAI 官方登录。请先登录 Codex。'
+            FriendlyLoginMissing = '未检测到有效的 OpenAI 官方登录。请先在终端运行 codex login。'
             FriendlyKeyMissing = '所选线路的 Windows 用户环境变量未配置，请重新运行安装程序或手动配置。'
             FriendlyCatalogMissing = '所选模型的模型目录缺失或配置不正确。'
             FriendlyConfigMissing = '未找到 Codex 配置文件，请先启动并登录一次 Codex。'
@@ -591,6 +649,7 @@ function Show-Switcher {
             ErrorReaderMissing = '未找到额度读取器，请重新安装本工具。'
             ErrorParseFailed = '无法解析官方额度数据。'
             ErrorTimedOut = '官方额度查询超时。'
+            ErrorNotLoggedIn = '官方 Codex 未登录，请先运行 codex login。'
             ErrorCheckFailed = '官方额度查询失败，请稍后重试。'
             ErrorStatus = "{0}`r`n线路切换功能仍可正常使用。"
             DeepSeekQuotaTitle = 'DeepSeek 余额'
@@ -648,6 +707,8 @@ function Show-Switcher {
             KeyMissingLabel = 'API key missing'
             OfficialAuthReady = 'Official sign-in ready'
             OfficialAuthMissing = 'Official sign-in not found'
+            OfficialAuthInvalid = 'Official sign-in is invalid'
+            LoginRequired = 'Sign in first'
             LastSync = 'Auto refresh every {0}s'
             CurrentStatus = 'Current provider: {0}    Model: {1}'
             CurrentProvider = 'Provider: {0}'
@@ -668,7 +729,7 @@ function Show-Switcher {
             SwitchDoneTitle = 'Done'
             SwitchDone = 'Switch complete. Create a new task in Codex.'
             SwitchFailedTitle = 'Switch failed'
-            FriendlyLoginMissing = 'Official OpenAI login was not found. Sign in to Codex first.'
+            FriendlyLoginMissing = 'A valid official OpenAI login was not found. Run codex login in a terminal first.'
             FriendlyKeyMissing = 'The Windows user environment variable for this provider is missing. Run the installer or configure it manually.'
             FriendlyCatalogMissing = 'The model catalog for the selected model is missing or invalid.'
             FriendlyConfigMissing = 'The Codex config file was not found. Start and sign in to Codex first.'
@@ -690,6 +751,7 @@ function Show-Switcher {
             ErrorReaderMissing = 'Quota reader was not found. Reinstall this tool.'
             ErrorParseFailed = 'The official quota response could not be parsed.'
             ErrorTimedOut = 'Official quota check timed out.'
+            ErrorNotLoggedIn = 'Official Codex is not signed in. Run codex login first.'
             ErrorCheckFailed = 'Official quota check failed. Try again later.'
             ErrorStatus = "{0}`r`nThe provider switcher remains available."
             DeepSeekQuotaTitle = 'DeepSeek Balance'
@@ -1088,14 +1150,30 @@ function Show-Switcher {
         $status.Text = ((& $text 'CurrentProvider') -f (& $getProviderDisplay $state))
         $currentModel.Text = ((& $text 'CurrentModel') -f $state.Model)
         $currentModel.ForeColor = $theme.Success
-        $authPath = Join-Path (Split-Path -Parent $ConfigPath) 'auth.json'
-        $officialReady = Test-Path -LiteralPath $authPath
+        $officialAuth = Get-OfficialAuthStatus
+        $officialReady = [bool]$officialAuth.Ready
         $officialRouteName.Text = & $text 'OfficialButton'
         $officialRouteModel.Text = ((& $text 'ModelLabel') -f [string]$definitions['official'].model)
-        $officialRouteStatus.Text = if ($officialReady) { & $text 'OfficialAuthReady' } else { & $text 'OfficialAuthMissing' }
+        $officialRouteStatus.Text = if ($officialReady) {
+            & $text 'OfficialAuthReady'
+        }
+        elseif ($officialAuth.Reason -eq 'missing') {
+            & $text 'OfficialAuthMissing'
+        }
+        else {
+            & $text 'OfficialAuthInvalid'
+        }
         $officialRouteStatus.ForeColor = if ($officialReady) { $theme.Success } else { $theme.Warning }
-        $officialSwitchButton.Text = if ($state.Provider -eq 'openai') { & $text 'ActiveRoute' } else { & $text 'SwitchRoute' }
-        $officialSwitchButton.Enabled = $state.Provider -ne 'openai'
+        $officialSwitchButton.Text = if ($state.Provider -eq 'openai') {
+            & $text 'ActiveRoute'
+        }
+        elseif (-not $officialReady) {
+            & $text 'LoginRequired'
+        }
+        else {
+            & $text 'SwitchRoute'
+        }
+        $officialSwitchButton.Enabled = $state.Provider -ne 'openai' -and $officialReady
         $customRouteList.BeginUpdate()
         $customRouteList.Items.Clear()
         $activeListItem = $null
@@ -1301,7 +1379,12 @@ function Show-Switcher {
             & $showQuotaError 'ErrorTimedOut'
         }
         elseif ($exitCode -ne 0 -or [string]::IsNullOrWhiteSpace($stdout)) {
-            & $showQuotaError 'ErrorCheckFailed'
+            if (($stdout + "`n" + $stderr) -match 'account authentication required|not logged in|login required') {
+                & $showQuotaError 'ErrorNotLoggedIn'
+            }
+            else {
+                & $showQuotaError 'ErrorCheckFailed'
+            }
         }
         else {
             & $applyQuotaJson $stdout

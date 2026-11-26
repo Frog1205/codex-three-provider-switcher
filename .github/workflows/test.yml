@@ -32,8 +32,8 @@ jobs:
           & ./tests/Test-Packages.ps1 -ArtifactsDir ./dist -ArtifactSuffix V_1.4_261026.02 -Integration
 
   test-macos-arm64:
-    name: macOS 14 (arm64) smoke + unit + GUI import
-    runs-on: macos-14
+    name: macOS 26 (arm64) smoke + unit + GUI import
+    runs-on: macos-26
 
     steps:
       - name: Checkout

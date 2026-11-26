@@ -10,7 +10,16 @@
 
 密钥输入过程不会显示字符。密钥只保存到当前 Windows 用户环境变量，不会写入本目录或 Codex `config.toml`。
 
-如果官方 Codex 额度显示为“暂不可用”，请先安装 Node.js 和 npm 版 Codex CLI：
+切回 GPT 官方线路前，必须先完成官方登录：
+
+```powershell
+codex login
+codex login status
+```
+
+切换器会校验 `%USERPROFILE%\.codex\auth.json` 中的登录字段。文件缺失、损坏或只有空 JSON 时，“切换到此线路”按钮会被禁用。
+
+官方额度读取会优先使用 PATH、Codex 沙箱目录或正在运行的桌面版 `codex.exe`。只有找不到原生 CLI 时，才需要安装 Node.js 和 npm 版 Codex CLI：
 
 ```powershell
 npm install -g @openai/codex

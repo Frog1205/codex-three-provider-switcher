@@ -143,7 +143,7 @@ macOS 版本目前是未签名的 Python/Tkinter GUI。首次双击 `.command` �
 
 - Honknet 和 DeepSeek 线路需要你自己合法取得的 API Key。
 - 第三方服务端必须支持 Codex 使用的 Responses API。只支持 `chat/completions` 的接口不能直接使用本项目默认配置。
-- 官方额度显示需要 Node.js 和 npm 版 `@openai/codex` CLI；未安装时三路切换仍可使用，只有 Official 卡片显示 `Unavailable`。
+- 官方额度显示会优先使用 `CODEX_CLI_PATH`、PATH、Codex 沙箱目录或正在运行的 `codex.exe`；没有原生 CLI 时才回退到 npm 版 `@openai/codex`。查询失败不会影响线路切换。
 - DeepSeek 余额显示使用官方公开的 `GET https://api.deepseek.com/user/balance`，只需配置 `DEEPSEEK_API_KEY`，不需要额外安装工具。
 - Honknet 额度显示使用公开的 `GET https://ai.honknet.io/api/v1/usage`，只需配置 `HONKNET_API_KEY` 或 `HONKAI_API_KEY`，不需要额外安装工具。
 
@@ -181,6 +181,15 @@ Windows 安装程序通过隐藏输入读取 Key，并保存到当前 Windows �
 先正常打开 Codex Desktop，使用 OpenAI/ChatGPT 账号登录。确认官方模型可以创建新任务并正常回复。
 
 安装程序不会保存或修改你的 OpenAI 登录凭据。官方线路继续使用 Codex 自己的 `auth.json`。
+
+如果桌面端没有显示登录入口，可在 Windows 终端运行：
+
+```powershell
+codex login
+codex login status
+```
+
+`auth.json` 存在但内容为空、损坏或不包含 API Key/ChatGPT token 时，切换器会显示“官方登录凭证无效”，并禁用“切换到此线路”按钮。
 
 ### 第二步：准备第三方 Key
 
@@ -516,11 +525,11 @@ Mac 版使用独立的额度读取器：未安装 Codex CLI 或未配置第三�
 这只代表额度查询失败，不影响三个 provider 按钮。依次检查：
 
 1. `codex --version` 是否可以正常运行。
-2. `%APPDATA%\npm\node_modules\@openai\codex\bin\codex.js` 是否存在。
+2. `CODEX_CLI_PATH`、PATH、`%USERPROFILE%\.codex\.sandbox-bin\codex.exe` 或正在运行的 Codex Desktop 是否提供原生 CLI。
 3. 官方 Codex 账号是否已经登录。
 4. 点击 `Refresh` 重试，或使用官方 [usage dashboard](https://chatgpt.com/codex/settings/usage) 核对。
 
-如果 `codex --version` 报 `Missing optional dependency @openai/codex-win32-x64`，说明全局 `@openai/codex` 安装不完整；执行 `npm install -g @openai/codex@latest` 补齐 Windows 平台二进制后重试。
+只有本机没有可用的原生 `codex.exe` 时，额度读取器才会回退到 `%APPDATA%\npm\node_modules\@openai\codex\bin\codex.js`。如果 `codex --version` 报 `Missing optional dependency @openai/codex-win32-x64`，说明全局 `@openai/codex` 安装不完整；执行 `npm install -g @openai/codex@latest` 补齐 Windows 平台二进制后重试，或把 `CODEX_CLI_PATH` 指向可用的 `codex.exe`。
 
 查询器每个阶段最多等待 8 秒，失败后不会卡住主窗口，并会在下一次自动刷新时重试。
 
